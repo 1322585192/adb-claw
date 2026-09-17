@@ -1,6 +1,8 @@
 package observe
 
 import (
+	"encoding/json"
+	"strings"
 	"testing"
 )
 
@@ -105,6 +107,72 @@ func TestFindByContentDesc(t *testing.T) {
 	}
 	if results[0].ContentDesc != "App icon" {
 		t.Errorf("found content_desc = %q", results[0].ContentDesc)
+	}
+}
+
+func TestHoistPackageAndCompactJSON(t *testing.T) {
+	tree, err := ParseUITree([]byte(sampleXML))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tree.Package != "com.example" {
+		t.Errorf("package = %q, want com.example", tree.Package)
+	}
+
+	el := tree.Elements[0]
+	if el.PackageName != "" {
+		t.Errorf("element package should be hoisted, got %q", el.PackageName)
+	}
+	if el.Center.X != 540 || el.Center.Y != 150 {
+		t.Errorf("center = (%d,%d), want (540,150) device pixels", el.Center.X, el.Center.Y)
+	}
+	if el.Bounds != (Bounds{Left: 0, Top: 120, Right: 1080, Bottom: 180}) {
+		t.Errorf("bounds = %+v, want device pixels [0,120][1080,180]", el.Bounds)
+	}
+
+	raw, err := json.Marshal(el)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(raw)
+	if strings.Contains(s, `"content_desc"`) {
+		t.Errorf("empty content_desc should be omitted: %s", s)
+	}
+	if strings.Contains(s, `"scrollable"`) {
+		t.Errorf("false scrollable should be omitted: %s", s)
+	}
+	if strings.Contains(s, `"package"`) {
+		t.Errorf("hoisted package should be omitted on element: %s", s)
+	}
+	if !strings.Contains(s, `"bounds"`) || !strings.Contains(s, `"center"`) {
+		t.Errorf("bounds and center must remain for tap precision: %s", s)
+	}
+
+	var decoded Element
+	if err := json.Unmarshal(raw, &decoded); err != nil {
+		t.Fatal(err)
+	}
+	if decoded.Center != el.Center || decoded.Bounds != el.Bounds {
+		t.Errorf("round-trip changed coordinates: %+v / %+v", decoded.Center, decoded.Bounds)
+	}
+}
+
+func TestHoistPackageKeepsMinority(t *testing.T) {
+	xml := `<?xml version="1.0" encoding="UTF-8"?>
+<hierarchy rotation="0">
+  <node index="0" text="A" resource-id="" class="android.widget.TextView" package="com.app" content-desc="" checkable="false" checked="false" clickable="true" enabled="true" focusable="true" focused="false" scrollable="false" selected="false" bounds="[0,0][100,100]"></node>
+  <node index="1" text="B" resource-id="" class="android.widget.TextView" package="com.app" content-desc="" checkable="false" checked="false" clickable="true" enabled="true" focusable="true" focused="false" scrollable="false" selected="false" bounds="[0,100][100,200]"></node>
+  <node index="2" text="Sys" resource-id="" class="android.widget.TextView" package="com.android.systemui" content-desc="" checkable="false" checked="false" clickable="true" enabled="true" focusable="true" focused="false" scrollable="false" selected="false" bounds="[0,200][100,300]"></node>
+</hierarchy>`
+	tree, err := ParseUITree([]byte(xml))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tree.Package != "com.app" {
+		t.Errorf("package = %q, want com.app", tree.Package)
+	}
+	if tree.Elements[2].PackageName != "com.android.systemui" {
+		t.Errorf("minority package should stay on element, got %q", tree.Elements[2].PackageName)
 	}
 }
 

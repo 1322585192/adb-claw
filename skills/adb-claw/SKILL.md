@@ -69,7 +69,7 @@ Your eyes, hands, and ears on Android. See what's on screen, tap any element, sc
 - **System audio capture** — `audio capture` records device audio via REMOTE_SUBMIX (Android 11+); streams WAV to stdout for piping to ASR tools. Combined with `monitor`, you get full sensory coverage: visual text + audio.
 
 **Core Strengths:**
-- **Observe → Act → Verify loop** — `observe` returns screenshot + indexed UI tree in one call; use element indices to target precisely across any screen size
+- **Observe → Act → Verify loop** — `observe` returns a JPEG screenshot file + indexed UI tree in one call; use element indices (device pixels) to target precisely across any screen size
 - **Deep links bypass CJK limits** — `adb input text` can't type Chinese/Japanese/Korean; `adb-claw open 'app://search?keyword=中文'` can
 - **Wait, don't poll** — `wait --text "Done"` blocks until the UI element appears, replacing fragile sleep/observe loops
 - **Smart scroll** — auto-calculates swipe coordinates from screen size; supports direction, page count, and scrolling within specific elements
@@ -191,15 +191,19 @@ If `doctor` reports no device, ask the user to:
 The core loop is **observe → decide → act → observe**:
 
 ```bash
-# 1. See what's on screen
-adb-claw observe --width 540
+# 1. See what's on screen (JPEG file + UI tree; no huge base64)
+adb-claw observe
 
 # 2. Act on what you see (use element index from observe output)
 adb-claw tap --index 3
 
 # 3. Verify the result
-adb-claw observe --width 540
+adb-claw observe
 ```
+
+`observe` writes a JPEG to `data.screenshot.path`. **Read that file to see the screen.** Do not paste the observe JSON into notes.
+
+**Tap using UI tree device pixels, never screenshot pixels.** `bounds` / `center` / `tap X Y` are device coordinates. Even if you pass `--width` to shrink the preview, `data.screenshot.scale` is metadata only — do not multiply or use image-pixel positions for `tap`.
 
 For CJK apps, use deep links to bypass text input limits:
 
@@ -246,19 +250,28 @@ Profiles are plain Markdown files. New app support = drop a `.md` file into `ski
 
 Captures screenshot and UI element tree in one call. **Always use this before and after actions.**
 
+Default: original-resolution **JPEG** (quality 70) written to `$TMPDIR/adb-claw-observe.jpg`. JSON returns the file path plus `device_width` / `device_height` / `image_width` / `image_height` / `scale` — **not** inline base64. UI tree `bounds` and `center` stay in **device pixels**.
+
 ```bash
-adb-claw observe              # Default
-adb-claw observe --width 540  # Scale screenshot width
+adb-claw observe                         # JPEG file + compact UI tree
+adb-claw observe --quality 50            # Smaller JPEG, same coordinates
+adb-claw observe --width 540             # Smaller preview only; tap coords unchanged
+adb-claw observe --inline                # Also embed base64 (avoid in long loops)
+adb-claw observe --file /tmp/screen.jpg  # Custom path
+adb-claw observe --format png            # PNG instead of JPEG
 ```
 
-Returns: base64 PNG screenshot, indexed UI elements with text/id/bounds/center coordinates.
+Returns: `screenshot.path` (read this image), size/scale metadata, indexed UI elements with text/id/bounds/center in device pixels.
+
+**Never tap using pixels from the screenshot image.** Use `--index` / `--text` / `--id`, or `center` from the UI tree.
 
 ### screenshot — Capture Screen
 
 ```bash
-adb-claw screenshot                      # Returns base64 PNG in JSON
-adb-claw screenshot -f output.png        # Save to file
-adb-claw screenshot --width 540          # Scale down
+adb-claw screenshot                      # Returns base64 JPEG in JSON
+adb-claw screenshot -f output.jpg        # Save to file
+adb-claw screenshot --format png -f out.png
+adb-claw screenshot --width 540          # Scale preview only
 ```
 
 ### tap — Tap UI Element
@@ -509,14 +522,16 @@ adb-claw ui find --index 3          # Find by index
 Before any action, run `observe` to see the screen. After every action, `observe` again to verify.
 
 ```
-1. adb-claw observe          → See what's on screen
-2. adb-claw tap --index 3    → Perform action
+1. adb-claw observe          → Read data.screenshot.path; use UI tree indices
+2. adb-claw tap --index 3    → Perform action (device pixels / index)
 3. adb-claw observe          → Verify result
 ```
 
+Track progress (e.g. which games already signed in) in a short checklist. Do not paste observe JSON or base64 into notes — that blows the context window.
+
 ### Prefer Index-Based Targeting
 
-Use `--index N` over coordinates. Indices from `observe` are stable across screen sizes.
+Use `--index N` over coordinates. Indices and `center` from `observe` are **device pixels**, stable across preview `--width`. Never convert screenshot-image pixels into `tap X Y`.
 
 ### Type After Focus
 

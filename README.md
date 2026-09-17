@@ -121,8 +121,9 @@ Both platforms use the **Triggers** list in `SKILL.md` to decide when to activat
 
 ```
 adb-claw
-├── observe [--width px]                        # Screenshot + UI tree (primary command)
-├── screenshot [--file path] [--width px]       # Screenshot only
+├── observe [--width px] [--format] [--quality] [--file] [--inline]
+│                                               # Screenshot + UI tree (JPEG file by default)
+├── screenshot [--file path] [--width px] [--format] [--quality]
 ├── ui tree                                     # UI element tree
 ├── ui find --text/--id/--index                 # Find UI elements
 ├── tap <x> <y> | --index/--id/--text           # Tap
@@ -156,10 +157,10 @@ adb-claw
 ### Observe & Interact
 
 ```bash
-# Screenshot + UI tree (always start here)
-adb-claw observe --width 540
+# Screenshot + UI tree (always start here; JPEG file + device-pixel UI tree)
+adb-claw observe
 
-# Tap by element index (preferred) or coordinates
+# Tap by element index (preferred) — device pixels, not screenshot-image pixels
 adb-claw tap --index 5
 adb-claw tap --text "Login"
 adb-claw tap 540 960
@@ -290,8 +291,8 @@ Contributions welcome — see `skills/apps/README.md` for the profile spec.
 
 ## Agent Workflow
 
-1. **Observe first** — Always `observe` before deciding an action
-2. **Prefer index** — Use `--index` over coordinates for cross-device reliability
+1. **Observe first** — Always `observe` before deciding an action. Read `data.screenshot.path`; do not paste observe JSON into notes
+2. **Prefer index** — Use `--index` or UI-tree `center` (device pixels). Never tap using screenshot-image pixels, even if `--width` scaled the preview
 3. **Scroll, don't swipe** — `scroll down` over manual `swipe` coordinates
 4. **Wait, don't poll** — `wait --text "Done"` over sleep+observe loops
 5. **Deep link for CJK** — `open 'app://search?keyword=中文'` instead of `type`

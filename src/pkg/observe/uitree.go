@@ -26,25 +26,27 @@ type Point struct {
 }
 
 // Element is a filtered, indexed UI element from the hierarchy.
+// Bounds and Center are always device pixels (not screenshot preview pixels).
 type Element struct {
 	Index       int    `json:"index"`
-	Class       string `json:"class"`
-	ResourceID  string `json:"resource_id"`
-	Text        string `json:"text"`
-	ContentDesc string `json:"content_desc"`
+	Class       string `json:"class,omitempty"`
+	ResourceID  string `json:"resource_id,omitempty"`
+	Text        string `json:"text,omitempty"`
+	ContentDesc string `json:"content_desc,omitempty"`
 	Bounds      Bounds `json:"bounds"`
 	Center      Point  `json:"center"`
-	Clickable   bool   `json:"clickable"`
-	Scrollable  bool   `json:"scrollable"`
-	Focusable   bool   `json:"focusable"`
+	Clickable   bool   `json:"clickable,omitempty"`
+	Scrollable  bool   `json:"scrollable,omitempty"`
+	Focusable   bool   `json:"focusable,omitempty"`
 	Enabled     bool   `json:"enabled"`
-	Selected    bool   `json:"selected"`
-	Checked     bool   `json:"checked"`
+	Selected    bool   `json:"selected,omitempty"`
+	Checked     bool   `json:"checked,omitempty"`
 	PackageName string `json:"package,omitempty"`
 }
 
 // UITree holds the parsed UI hierarchy.
 type UITree struct {
+	Package  string    `json:"package,omitempty"`
 	Elements []Element `json:"elements"`
 }
 
@@ -198,7 +200,36 @@ func ParseUITree(data []byte) (*UITree, error) {
 	}
 	walk(h.Nodes)
 
-	return &UITree{Elements: elements}, nil
+	pkg, elements := hoistPackage(elements)
+	return &UITree{Package: pkg, Elements: elements}, nil
+}
+
+// hoistPackage lifts the most common package name to the tree level and
+// clears it on matching elements so JSON is not repeated per node.
+func hoistPackage(elements []Element) (string, []Element) {
+	counts := map[string]int{}
+	for _, el := range elements {
+		if el.PackageName != "" {
+			counts[el.PackageName]++
+		}
+	}
+	best, bestN := "", 0
+	for p, n := range counts {
+		if n > bestN {
+			best, bestN = p, n
+		}
+	}
+	if best == "" {
+		return "", elements
+	}
+	out := make([]Element, len(elements))
+	for i, el := range elements {
+		out[i] = el
+		if el.PackageName == best {
+			out[i].PackageName = ""
+		}
+	}
+	return best, out
 }
 
 // FindByIndex returns the element at the given index.

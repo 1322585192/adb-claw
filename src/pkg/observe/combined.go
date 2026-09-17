@@ -15,8 +15,9 @@ type ObserveResult struct {
 
 // Observe captures both screenshot and UI tree in parallel.
 // Partial failure is tolerated — one failing doesn't block the other.
-// If maxWidth > 0, the screenshot is downscaled proportionally.
-func Observe(cmd adb.Commander, maxWidth int) *ObserveResult {
+// Screenshot encoding follows opts; UI tree coordinates stay in device pixels.
+// A screenshot file is always written (opts.Path or $TMPDIR/adb-claw-observe.jpg).
+func Observe(cmd adb.Commander, opts ObserveOptions) *ObserveResult {
 	result := &ObserveResult{}
 	var mu sync.Mutex
 	var wg sync.WaitGroup
@@ -26,7 +27,18 @@ func Observe(cmd adb.Commander, maxWidth int) *ObserveResult {
 	// Screenshot goroutine
 	go func() {
 		defer wg.Done()
-		ss, err := ScreenshotAsBase64(cmd, maxWidth)
+		format := formatOrJPEG(opts.Format)
+		path := opts.Path
+		if path == "" {
+			path = DefaultObservePath(format)
+		}
+		ss, err := CaptureScreenshot(cmd, CaptureOptions{
+			MaxWidth: opts.MaxWidth,
+			Format:   format,
+			Quality:  opts.Quality,
+			Path:     path,
+			Inline:   opts.Inline,
+		})
 		mu.Lock()
 		defer mu.Unlock()
 		if err != nil {

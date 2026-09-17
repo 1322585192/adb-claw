@@ -3,6 +3,7 @@ package output
 import (
 	"bytes"
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 )
@@ -30,6 +31,26 @@ func TestWriterSuccess(t *testing.T) {
 	}
 	if resp.Timestamp == "" {
 		t.Error("expected timestamp")
+	}
+}
+
+func TestWriterSuccessCompact(t *testing.T) {
+	var buf bytes.Buffer
+	w := &Writer{out: &buf, format: "json"}
+
+	start := time.Now()
+	w.SuccessCompact("observe", map[string]string{"foo": "bar"}, start)
+
+	out := buf.String()
+	if strings.Contains(out, "\n  ") {
+		t.Errorf("compact JSON should not be indented: %s", out)
+	}
+	var resp Response
+	if err := json.Unmarshal(buf.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal compact response: %v", err)
+	}
+	if !resp.OK || resp.Command != "observe" {
+		t.Errorf("unexpected compact response: %+v", resp)
 	}
 }
 

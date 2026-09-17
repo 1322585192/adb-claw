@@ -55,7 +55,7 @@
 
 | 任务 | 说明 |
 |------|------|
-| 截屏体积优化 | 支持 `--format jpeg` 输出，减少 base64 体积 |
+| 截屏体积优化 | `observe` 默认 JPEG 文件 + compact UI 树；坐标保持设备像素 | ✅ |
 | observe 重试机制 | `uiautomator dump` 失败时自动重试 |
 | `device connect` | 无线 ADB 连接（`adb tcpip` + `adb connect`） |
 
