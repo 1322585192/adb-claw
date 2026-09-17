@@ -44,6 +44,16 @@ func NewWriter(format string, verbose bool) *Writer {
 
 // Success writes a successful response.
 func (w *Writer) Success(command string, data interface{}, start time.Time) {
+	w.success(command, data, start, false)
+}
+
+// SuccessCompact writes a successful response as minified JSON (no indent).
+// Used by observe so large UI trees do not waste agent context on whitespace.
+func (w *Writer) SuccessCompact(command string, data interface{}, start time.Time) {
+	w.success(command, data, start, true)
+}
+
+func (w *Writer) success(command string, data interface{}, start time.Time, compact bool) {
 	resp := Response{
 		OK:         true,
 		Command:    command,
@@ -51,7 +61,7 @@ func (w *Writer) Success(command string, data interface{}, start time.Time) {
 		DurationMs: time.Since(start).Milliseconds(),
 		Timestamp:  time.Now().UTC().Format(time.RFC3339Nano),
 	}
-	w.write(resp)
+	w.write(resp, compact)
 }
 
 // Fail writes an error response and marks the writer as failed.
@@ -68,7 +78,7 @@ func (w *Writer) Fail(command string, code, message, suggestion string, start ti
 		DurationMs: time.Since(start).Milliseconds(),
 		Timestamp:  time.Now().UTC().Format(time.RFC3339Nano),
 	}
-	w.write(resp)
+	w.write(resp, false)
 }
 
 // Verbose prints a debug message to stderr if verbose mode is on.
@@ -78,7 +88,7 @@ func (w *Writer) Verbose(format string, args ...interface{}) {
 	}
 }
 
-func (w *Writer) write(resp Response) {
+func (w *Writer) write(resp Response, compact bool) {
 	switch w.format {
 	case "quiet":
 		if !resp.OK && resp.Error != nil {
@@ -97,7 +107,9 @@ func (w *Writer) write(resp Response) {
 		}
 	default: // json
 		enc := json.NewEncoder(w.out)
-		enc.SetIndent("", "  ")
+		if !compact {
+			enc.SetIndent("", "  ")
+		}
 		enc.Encode(resp)
 	}
 }

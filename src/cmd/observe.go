@@ -1,8 +1,7 @@
 package cmd
 
 import (
-	"encoding/base64"
-	"os"
+	"strings"
 	"time"
 
 	"github.com/llm-net/adb-claw/pkg/observe"
@@ -11,17 +10,39 @@ import (
 
 var (
 	observeMaxWidth int
+	observeFormat   string
+	observeQuality  int
+	observeFile     string
+	observeInline   bool
 )
 
 var observeCmd = &cobra.Command{
 	Use:   "observe",
 	Short: "Capture screenshot + UI tree + device state",
-	Long:  "Captures a screenshot and UI element tree in parallel, returning both in a single response.",
+	Long: `Captures a screenshot and UI element tree in parallel, returning both in a single response.
+
+The screenshot is JPEG-compressed and written to a file by default (no base64 in JSON)
+to keep agent context small. UI tree bounds/center stay in device pixels — never tap
+using preview-image pixels even if --width scaled the screenshot.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		start := time.Now()
 		writer.Verbose("starting observe (screenshot + ui tree in parallel)")
 
-		result := observe.Observe(client, observeMaxWidth)
+		format := strings.ToLower(observeFormat)
+		if format != "jpeg" && format != "png" {
+			writer.Fail("observe", "INVALID_ARGS",
+				"Unsupported screenshot format '"+observeFormat+"'",
+				"Use --format jpeg or --format png", start)
+			return nil
+		}
+
+		result := observe.Observe(client, observe.ObserveOptions{
+			MaxWidth: observeMaxWidth,
+			Format:   format,
+			Quality:  observeQuality,
+			Path:     observeFile,
+			Inline:   observeInline,
+		})
 
 		// Check if we got at least something
 		if result.Screenshot == nil && result.UI == nil {
@@ -31,7 +52,7 @@ var observeCmd = &cobra.Command{
 			return nil
 		}
 
-		writer.Success("observe", result, start)
+		writer.SuccessCompact("observe", result, start)
 		return nil
 	},
 }
@@ -39,6 +60,8 @@ var observeCmd = &cobra.Command{
 var (
 	screenshotOutput   string
 	screenshotMaxWidth int
+	screenshotFormat   string
+	screenshotQuality  int
 )
 
 var screenshotCmd = &cobra.Command{
@@ -48,42 +71,44 @@ var screenshotCmd = &cobra.Command{
 		start := time.Now()
 		writer.Verbose("capturing screenshot")
 
-		data, err := observe.TakeScreenshot(client, screenshotMaxWidth)
+		format := strings.ToLower(screenshotFormat)
+		if format != "jpeg" && format != "png" {
+			writer.Fail("screenshot", "INVALID_ARGS",
+				"Unsupported screenshot format '"+screenshotFormat+"'",
+				"Use --format jpeg or --format png", start)
+			return nil
+		}
+
+		inline := screenshotOutput == ""
+		result, err := observe.CaptureScreenshot(client, observe.CaptureOptions{
+			MaxWidth: screenshotMaxWidth,
+			Format:   format,
+			Quality:  screenshotQuality,
+			Path:     screenshotOutput,
+			Inline:   inline,
+		})
 		if err != nil {
 			writer.Fail("screenshot", "SCREENSHOT_FAILED", err.Error(),
 				"Ensure the device screen is on and unlocked", start)
 			return nil
 		}
 
-		// If output file specified, write raw PNG
-		if screenshotOutput != "" {
-			if err := os.WriteFile(screenshotOutput, data, 0644); err != nil {
-				writer.Fail("screenshot", "FILE_WRITE_ERROR", err.Error(), "", start)
-				return nil
-			}
-			writer.Success("screenshot", map[string]interface{}{
-				"format":     "png",
-				"path":       screenshotOutput,
-				"size_bytes": len(data),
-			}, start)
-			return nil
-		}
-
-		// Otherwise return base64 in JSON envelope
-		writer.Success("screenshot", map[string]interface{}{
-			"format":     "png",
-			"base64":     base64.StdEncoding.EncodeToString(data),
-			"size_bytes": len(data),
-		}, start)
+		writer.Success("screenshot", result, start)
 		return nil
 	},
 }
 
 func init() {
 	screenshotCmd.Flags().StringVarP(&screenshotOutput, "file", "f", "", "Save screenshot to file instead of base64 output")
-	screenshotCmd.Flags().IntVar(&screenshotMaxWidth, "width", 0, "Max image width in pixels (0 = original size)")
+	screenshotCmd.Flags().IntVar(&screenshotMaxWidth, "width", 0, "Max image width in pixels (0 = original size; tap coords stay device pixels)")
+	screenshotCmd.Flags().StringVar(&screenshotFormat, "format", "jpeg", "Image format: jpeg | png")
+	screenshotCmd.Flags().IntVar(&screenshotQuality, "quality", observe.DefaultJPEGQuality, "JPEG quality 1-100")
 
-	observeCmd.Flags().IntVar(&observeMaxWidth, "width", 0, "Max screenshot width in pixels (0 = original size)")
+	observeCmd.Flags().IntVar(&observeMaxWidth, "width", 0, "Max screenshot preview width in pixels (0 = original size; does not change tap coordinates)")
+	observeCmd.Flags().StringVar(&observeFormat, "format", "jpeg", "Screenshot format: jpeg | png")
+	observeCmd.Flags().IntVar(&observeQuality, "quality", observe.DefaultJPEGQuality, "JPEG quality 1-100")
+	observeCmd.Flags().StringVar(&observeFile, "file", "", "Screenshot output path (default: $TMPDIR/adb-claw-observe.jpg)")
+	observeCmd.Flags().BoolVar(&observeInline, "inline", false, "Also include base64 screenshot in JSON (large; avoid in agent loops)")
 
 	rootCmd.AddCommand(observeCmd)
 	rootCmd.AddCommand(screenshotCmd)

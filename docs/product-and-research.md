@@ -158,4 +158,4 @@ Appdome、Promon、Guardsquare 等商业 SDK 综合数十个信号 + ML 分析 +
 | `uiautomator dump` 在动画中可能失败 | 先暂停动画（如点击暂停视频），再 dump |
 | 文本输入仅支持 ASCII | `adb shell input text` 的限制，CJK 字符需用深度链接绕过 |
 | 输入事件可被 App 检测（deviceId=-1） | `adb shell input` 的固有特征，当前不做反侦测 |
-| 截屏为 PNG 格式（~5MB） | 通过 `--width` 缩放减少体积，未来可考虑 JPEG 转换 |
+| 截屏体积（原 PNG ~5MB） | `observe` 默认写 JPEG 文件（quality 70），JSON 只回路径；`--width` 只缩小预览。UI 树 `bounds`/`center` 与 `tap` 始终是设备像素 |
