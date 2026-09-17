@@ -121,7 +121,7 @@ Both platforms use the **Triggers** list in `SKILL.md` to decide when to activat
 
 ```
 adb-claw
-├── observe [--width px] [--format] [--quality] [--file] [--inline]
+├── observe [--width px] [--format] [--quality] [--file]
 │                                               # Screenshot + UI tree (JPEG file by default)
 ├── screenshot [--file path] [--width px] [--format] [--quality]
 ├── ui tree                                     # UI element tree

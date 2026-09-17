@@ -191,7 +191,7 @@ If `doctor` reports no device, ask the user to:
 The core loop is **observe → decide → act → observe**:
 
 ```bash
-# 1. See what's on screen (JPEG file + UI tree; no huge base64)
+# 1. See what's on screen (JPEG file + UI tree; JSON never includes image bytes)
 adb-claw observe
 
 # 2. Act on what you see (use element index from observe output)
@@ -250,13 +250,12 @@ Profiles are plain Markdown files. New app support = drop a `.md` file into `ski
 
 Captures screenshot and UI element tree in one call. **Always use this before and after actions.**
 
-Default: original-resolution **JPEG** (quality 70) written to `$TMPDIR/adb-claw-observe.jpg`. JSON returns the file path plus `device_width` / `device_height` / `image_width` / `image_height` / `scale` — **not** inline base64. UI tree `bounds` and `center` stay in **device pixels**.
+Default: original-resolution **JPEG** (quality 70) written to `$TMPDIR/adb-claw-observe.jpg`. JSON returns **only** the file path plus `device_width` / `device_height` / `image_width` / `image_height` / `scale`. Image bytes and base64 are never printed to the console. UI tree `bounds` and `center` stay in **device pixels**.
 
 ```bash
 adb-claw observe                         # JPEG file + compact UI tree
 adb-claw observe --quality 50            # Smaller JPEG, same coordinates
 adb-claw observe --width 540             # Smaller preview only; tap coords unchanged
-adb-claw observe --inline                # Also embed base64 (avoid in long loops)
 adb-claw observe --file /tmp/screen.jpg  # Custom path
 adb-claw observe --format png            # PNG instead of JPEG
 ```
@@ -268,11 +267,13 @@ Returns: `screenshot.path` (read this image), size/scale metadata, indexed UI el
 ### screenshot — Capture Screen
 
 ```bash
-adb-claw screenshot                      # Returns base64 JPEG in JSON
-adb-claw screenshot -f output.jpg        # Save to file
+adb-claw screenshot                      # Write JPEG to $TMPDIR/adb-claw-screenshot.jpg
+adb-claw screenshot -f output.jpg        # Custom path
 adb-claw screenshot --format png -f out.png
 adb-claw screenshot --width 540          # Scale preview only
 ```
+
+JSON returns `path` and size/scale metadata only — never image bytes or base64. Read the file at `path` to see the screen.
 
 ### tap — Tap UI Element
 
@@ -527,7 +528,7 @@ Before any action, run `observe` to see the screen. After every action, `observe
 3. adb-claw observe          → Verify result
 ```
 
-Track progress (e.g. which games already signed in) in a short checklist. Do not paste observe JSON or base64 into notes — that blows the context window.
+Track progress (e.g. which games already signed in) in a short checklist. Do not paste observe JSON into notes — that blows the context window.
 
 ### Prefer Index-Based Targeting
 

@@ -123,7 +123,7 @@ func (w *Writer) writeTextData(data interface{}) {
 			switch inner := val.(type) {
 			case string:
 				if len(inner) > 200 {
-					// Truncate long strings (e.g. base64 screenshots)
+					// Truncate long strings
 					fmt.Fprintf(w.out, "%s: <%d chars>\n", key, len(inner))
 				} else {
 					fmt.Fprintf(w.out, "%s: %s\n", key, inner)

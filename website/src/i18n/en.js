@@ -191,7 +191,7 @@ export default {
         category: 'Observation',
         items: [
           { cmd: 'observe', desc: 'Screenshot + UI tree in parallel', flags: '--width' },
-          { cmd: 'screenshot', desc: 'Capture screen (base64 or file)', flags: '--file, --width' },
+          { cmd: 'screenshot', desc: 'Capture screen (file only; JSON returns path)', flags: '--file, --width, --format' },
           { cmd: 'ui tree', desc: 'Indexed UI element tree' },
           { cmd: 'ui find', desc: 'Find elements by text/id/index', flags: '--text, --id, --index' },
         ],

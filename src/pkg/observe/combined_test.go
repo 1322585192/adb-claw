@@ -1,9 +1,11 @@
 package observe
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/llm-net/adb-claw/pkg/adb"
@@ -43,15 +45,12 @@ func TestObserveDefaultPathWritesFile(t *testing.T) {
 	// control TMPDIR safely alongside parallel tests.
 	t.Setenv("TMPDIR", t.TempDir())
 	cmd := &mockObserveCommander{png: solidPNG(80, 120)}
-	result := Observe(cmd, ObserveOptions{Format: "jpeg", Inline: true})
+	result := Observe(cmd, ObserveOptions{Format: "jpeg"})
 	if result.Screenshot == nil {
 		t.Fatalf("screenshot missing: %v", result.Errors)
 	}
-	if result.Screenshot.Base64 == "" {
-		t.Error("inline should add base64")
-	}
 	if result.Screenshot.Path == "" {
-		t.Fatal("observe must still write a file when --inline is set")
+		t.Fatal("observe must write a file; console base64 is not allowed")
 	}
 	if _, err := os.Stat(result.Screenshot.Path); err != nil {
 		t.Fatalf("expected screenshot file: %v", err)
@@ -73,8 +72,12 @@ func TestObserveWritesJPEGFileKeepsDeviceCoords(t *testing.T) {
 	if result.UI == nil {
 		t.Fatalf("ui tree missing: %v", result.Errors)
 	}
-	if result.Screenshot.Base64 != "" {
-		t.Error("observe default must not inline base64")
+	rawJSON, err := json.Marshal(result.Screenshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(rawJSON), "base64") {
+		t.Errorf("JSON must never contain base64: %s", rawJSON)
 	}
 	if result.Screenshot.Scale != 1 {
 		t.Errorf("scale = %v, want 1", result.Screenshot.Scale)

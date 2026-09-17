@@ -11,8 +11,8 @@
   "tools": [
     {
       "name": "observe",
-      "description": "Capture screenshot + UI element tree + device state in one call. Default: JPEG file (no base64) plus compact UI tree. Tap using UI tree device pixels, never screenshot-image pixels.",
-      "usage": "adb-claw observe [--quality 70] [--file path] [--inline] [--width px] [--format jpeg|png]",
+      "description": "Capture screenshot + UI element tree + device state in one call. Default: JPEG file plus compact UI tree. JSON never includes image bytes or base64. Tap using UI tree device pixels, never screenshot-image pixels.",
+      "usage": "adb-claw observe [--quality 70] [--file path] [--width px] [--format jpeg|png]",
       "returns": "screenshot.path + device/image size + scale, UI elements with index/id/text/bounds/center (device pixels)",
       "when_to_use": "Before deciding any action. After every action to verify the result. Read the screenshot file; do not paste JSON into notes."
     },
@@ -20,7 +20,7 @@
       "name": "screenshot",
       "description": "Capture a screenshot of the device screen.",
       "usage": "adb-claw screenshot [-f file.jpg] [--format jpeg|png] [--quality 70] [--width px]",
-      "returns": "JPEG/PNG as base64 or saved to file, plus device/image size and scale",
+      "returns": "screenshot.path plus device/image size and scale (never base64)",
       "when_to_use": "When you only need the visual state without UI element data."
     },
     {
@@ -109,7 +109,7 @@
     }
   ],
   "workflow_hints": {
-    "observe_first": "Always run 'observe' before deciding an action and after performing an action to verify results. Read data.screenshot.path; do not paste observe JSON or base64 into notes.",
+    "observe_first": "Always run 'observe' before deciding an action and after performing an action to verify results. Read data.screenshot.path; JSON never includes image bytes.",
     "prefer_index": "When tapping, prefer --index over coordinates. Indices and center from observe are device pixels. Never tap using screenshot-image pixels even if --width scaled the preview.",
     "type_after_focus": "Always tap an input field first, then use 'type' to enter text.",
     "scroll_pattern": "To scroll down: swipe from bottom-center to top-center (e.g., swipe 540 1800 540 600).",

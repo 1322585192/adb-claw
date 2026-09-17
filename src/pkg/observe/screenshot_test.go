@@ -2,7 +2,7 @@ package observe
 
 import (
 	"bytes"
-	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"image"
 	"image/color"
@@ -55,7 +55,7 @@ func solidPNG(width, height int) []byte {
 	return buf.Bytes()
 }
 
-func TestCaptureScreenshotJPEGDefaultNoInline(t *testing.T) {
+func TestCaptureScreenshotJPEGWritesFileNoBase64(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "observe.jpg")
 	cmd := &mockCaptureCommander{png: solidPNG(1080, 2340)}
@@ -70,8 +70,12 @@ func TestCaptureScreenshotJPEGDefaultNoInline(t *testing.T) {
 	if result.Format != "jpeg" {
 		t.Errorf("format = %q, want jpeg", result.Format)
 	}
-	if result.Base64 != "" {
-		t.Error("expected no base64 when Inline is false")
+	rawJSON, err := json.Marshal(result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(rawJSON), "base64") {
+		t.Errorf("JSON must never contain base64: %s", rawJSON)
 	}
 	if result.DeviceWidth != 1080 || result.DeviceHeight != 2340 {
 		t.Errorf("device size = %dx%d, want 1080x2340", result.DeviceWidth, result.DeviceHeight)
@@ -105,27 +109,25 @@ func TestCaptureScreenshotJPEGDefaultNoInline(t *testing.T) {
 	}
 }
 
-func TestCaptureScreenshotInlineBase64(t *testing.T) {
+func TestCaptureScreenshotEmptyPathWritesDefaultFile(t *testing.T) {
+	t.Setenv("TMPDIR", t.TempDir())
 	cmd := &mockCaptureCommander{png: solidPNG(100, 200)}
-	result, err := CaptureScreenshot(cmd, CaptureOptions{
-		Format: "jpeg",
-		Inline: true,
-	})
+	result, err := CaptureScreenshot(cmd, CaptureOptions{Format: "jpeg"})
 	if err != nil {
 		t.Fatalf("CaptureScreenshot: %v", err)
 	}
-	if result.Path != "" {
-		t.Errorf("path should be empty when inline-only, got %q", result.Path)
+	if result.Path == "" {
+		t.Fatal("expected a file path; console base64 is not allowed")
 	}
-	if result.Base64 == "" {
-		t.Fatal("expected base64 when Inline is true")
+	if _, err := os.Stat(result.Path); err != nil {
+		t.Fatalf("expected screenshot file: %v", err)
 	}
-	decoded, err := base64.StdEncoding.DecodeString(result.Base64)
+	rawJSON, err := json.Marshal(result)
 	if err != nil {
-		t.Fatalf("base64: %v", err)
+		t.Fatal(err)
 	}
-	if !bytes.Equal(decoded, result.Bytes) {
-		t.Error("base64 does not match encoded bytes")
+	if strings.Contains(string(rawJSON), "base64") {
+		t.Errorf("JSON must never contain base64: %s", rawJSON)
 	}
 }
 
@@ -172,8 +174,8 @@ func TestNormalizeDefaults(t *testing.T) {
 	if opts.Quality != DefaultJPEGQuality {
 		t.Errorf("quality = %d, want %d", opts.Quality, DefaultJPEGQuality)
 	}
-	if opts.Path != "" {
-		t.Errorf("CaptureScreenshot must not invent a path, got %q", opts.Path)
+	if !strings.HasSuffix(opts.Path, "adb-claw-screenshot.jpg") {
+		t.Errorf("empty path should default to screenshot file, got %q", opts.Path)
 	}
 }
 

@@ -130,7 +130,7 @@ claude --plugin-dir .  # 在项目根目录启动，加载当前目录为插件
 adb-claw
 ├── device list                    # 列出已连接设备
 ├── device info                    # 设备详情（型号/版本/屏幕尺寸/密度）
-├── observe [--width px] [--format] [--quality] [--file] [--inline]  # 截屏 + UI 树并行（默认 JPEG 文件，坐标仍为设备像素）
+├── observe [--width px] [--format] [--quality] [--file]  # 截屏 + UI 树并行（JPEG 文件，JSON 不含图片/base64，坐标仍为设备像素）
 ├── screenshot [--file path] [--width px] [--format] [--quality]  # 截屏（默认 JPEG）
 ├── ui tree                        # UI 元素树（带 index）
 ├── ui find --text/--id/--index    # 查找 UI 元素
