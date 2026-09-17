@@ -189,7 +189,7 @@ export default {
         category: '观察',
         items: [
           { cmd: 'observe', desc: '并行截屏 + UI 树', flags: '--width' },
-          { cmd: 'screenshot', desc: '屏幕截图（base64 或文件）', flags: '--file, --width' },
+          { cmd: 'screenshot', desc: '屏幕截图（写入文件，JSON 只回路径）', flags: '--file, --width, --format' },
           { cmd: 'ui tree', desc: '索引化 UI 元素树' },
           { cmd: 'ui find', desc: '按文本/ID/索引查找元素', flags: '--text, --id, --index' },
         ],

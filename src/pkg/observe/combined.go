@@ -37,7 +37,6 @@ func Observe(cmd adb.Commander, opts ObserveOptions) *ObserveResult {
 			Format:   format,
 			Quality:  opts.Quality,
 			Path:     path,
-			Inline:   opts.Inline,
 		})
 		mu.Lock()
 		defer mu.Unlock()
