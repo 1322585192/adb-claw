@@ -95,7 +95,7 @@ adb-claw tap --normalized 500 500 --frame FRAME_TOKEN --wait-changed 1500
 ## Why ADB Claw
 
 - **Image-only observe** — `observe` / `frame.latest` writes a JPEG. JSON never includes image bytes or base64.
-- **Frame-bound normalized actions** — Model tools use a 1000×1000 (0–999) grid plus the latest `frame_token`. adb-claw maps onto that JPEG's action space and rejects a token from the wrong rotation.
+- **Frame-bound normalized actions** — Model tools use a 1000×1000 (0–999) grid plus the latest `frame_token`. adb-claw maps onto that JPEG's action space and rejects a token when live screen width/height no longer match (a true rotate). A landscape JPEG is still valid if dumpsys rotation is 1 and the sidecar says 0.
 - **Livestream latest frame** — a background pump keeps only the newest JPEG. `observe` copies that frame; it does not restart PNG screencap when the pump is running. `serve` uses the same capacity-1 buffer.
 - **Built-in Unicode input** — focus a field, then `adb-claw type "中文"`; no APK or IME change
 - **Deep links reduce steps** — prefer `adb-claw open 'app://search?keyword=中文'` when a profile provides one

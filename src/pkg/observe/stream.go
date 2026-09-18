@@ -12,6 +12,7 @@ import (
 	"github.com/llm-net/adb-claw/pkg/adb"
 	"github.com/llm-net/adb-claw/pkg/atomicfile"
 	"github.com/llm-net/adb-claw/pkg/frameartifact"
+	"github.com/llm-net/adb-claw/pkg/input"
 	"github.com/llm-net/adb-claw/pkg/perf"
 	"github.com/llm-net/adb-claw/pkg/stream"
 
@@ -50,7 +51,7 @@ func useLiveStreamMeta(meta *frameartifact.Metadata) bool {
 
 func observeFromStream(cmd adb.Commander, opts ObserveOptions) (*ScreenshotResult, error) {
 	key := stream.ResolveKey(cmd)
-	if snap, err := snapshotIfReady(key, opts); err == nil {
+	if snap, err := snapshotIfReady(cmd, key, opts); err == nil {
 		return snap, nil
 	}
 	if EnsureStream != nil {
@@ -67,12 +68,12 @@ func observeFromStream(cmd adb.Commander, opts ObserveOptions) (*ScreenshotResul
 		if err != nil {
 			return nil, err
 		}
-		return snapshotLatest(latest, opts)
+		return snapshotLatest(cmd, latest, opts)
 	}
 	return nil, fmt.Errorf("no live stream")
 }
 
-func snapshotIfReady(key string, opts ObserveOptions) (*ScreenshotResult, error) {
+func snapshotIfReady(cmd adb.Commander, key string, opts ObserveOptions) (*ScreenshotResult, error) {
 	latest, err := stream.Read(key)
 	if err != nil {
 		return nil, err
@@ -81,12 +82,12 @@ func snapshotIfReady(key string, opts ObserveOptions) (*ScreenshotResult, error)
 		return nil, fmt.Errorf("latest frame empty")
 	}
 	if stream.Running(key) || stream.Age(latest) <= stream.FreshAge {
-		return snapshotLatest(latest, opts)
+		return snapshotLatest(cmd, latest, opts)
 	}
 	return nil, fmt.Errorf("latest frame stale")
 }
 
-func snapshotLatest(latest *stream.Latest, opts ObserveOptions) (*ScreenshotResult, error) {
+func snapshotLatest(cmd adb.Commander, latest *stream.Latest, opts ObserveOptions) (*ScreenshotResult, error) {
 	clock := perf.Start()
 	profile := &TimingProfile{Mode: captureModeOf(latest)}
 	data, err := stream.ReadJPEG(latest)
@@ -154,6 +155,14 @@ func snapshotLatest(latest *stream.Latest, opts ObserveOptions) (*ScreenshotResu
 	if capturedAt.IsZero() {
 		capturedAt = time.Now().UTC()
 	}
+	rotation := latest.Rotation
+	rotationKnown := latest.RotationKnown
+	if cmd != nil {
+		if rot, err := input.CurrentRotation(cmd); err == nil {
+			rotation = rot
+			rotationKnown = true
+		}
+	}
 	result := &ScreenshotResult{
 		Format:        "jpeg",
 		Path:          path,
@@ -167,8 +176,8 @@ func snapshotLatest(latest *stream.Latest, opts ObserveOptions) (*ScreenshotResu
 		ActionHeight:  deviceH,
 		ImageWidth:    imageW,
 		ImageHeight:   imageH,
-		Rotation:      latest.Rotation,
-		RotationKnown: latest.RotationKnown,
+		Rotation:      rotation,
+		RotationKnown: rotationKnown,
 		Scale:         scaleFactor(imageW, deviceW),
 		Complete:      latest.Complete,
 		Mode:          captureModeOf(latest),
@@ -196,8 +205,8 @@ func snapshotLatest(latest *stream.Latest, opts ObserveOptions) (*ScreenshotResu
 		ActionHeight:  deviceH,
 		ImageWidth:    imageW,
 		ImageHeight:   imageH,
-		Rotation:      latest.Rotation,
-		RotationKnown: latest.RotationKnown,
+		Rotation:      rotation,
+		RotationKnown: rotationKnown,
 		Complete:      latest.Complete,
 	}); err != nil {
 		return nil, fmt.Errorf("write frame metadata: %w", err)
@@ -218,7 +227,7 @@ func captureModeOf(latest *stream.Latest) string {
 	return "stream"
 }
 
-func waitStreamChange(key string, baseline *frameartifact.Metadata, timeout, interval time.Duration) (*ChangeResult, error) {
+func waitStreamChange(cmd adb.Commander, key string, baseline *frameartifact.Metadata, timeout, interval time.Duration) (*ChangeResult, error) {
 	if interval <= 0 {
 		interval = 40 * time.Millisecond
 	}
@@ -229,11 +238,10 @@ func waitStreamChange(key string, baseline *frameartifact.Metadata, timeout, int
 		latest, err := stream.Read(key)
 		if err == nil {
 			changed := latest.Hash != baseline.Hash ||
-				latest.Rotation != baseline.Rotation ||
 				latest.DeviceWidth != baseline.ActionWidth ||
 				latest.DeviceHeight != baseline.ActionHeight
 			if changed || !time.Now().Before(deadline) {
-				snap, snapErr := snapshotLatest(latest, ObserveOptions{
+				snap, snapErr := snapshotLatest(cmd, latest, ObserveOptions{
 					MaxWidth:  baseline.MaxWidth,
 					MaxPixels: baseline.MaxPixels,
 					Format:    "jpeg",

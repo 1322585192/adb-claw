@@ -158,7 +158,7 @@ func TestSnapshotNotLatestPath(t *testing.T) {
 	jpeg := colorJPEG(20, 40, color.RGBA{B: 255, A: 255})
 	latest := writePumpFrame(t, jpeg, 1, 3)
 	dest := filepath.Join(t.TempDir(), "copy.jpg")
-	ss, err := snapshotLatest(latest, ObserveOptions{Path: dest, Format: "jpeg"})
+	ss, err := snapshotLatest(nil, latest, ObserveOptions{Path: dest, Format: "jpeg"})
 	if err != nil {
 		t.Fatal(err)
 	}

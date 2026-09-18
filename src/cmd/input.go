@@ -208,19 +208,39 @@ func loadActionFrame(token string) (*frameartifact.Metadata, error) {
 	if err != nil {
 		return nil, staleFrameError{err.Error()}
 	}
-	if err := validateFrameRotation(client, meta); err != nil {
+	if err := validateFrameActionSpace(client, meta); err != nil {
 		return nil, err
 	}
 	return meta, nil
 }
 
-func validateFrameRotation(cmd adb.Commander, meta *frameartifact.Metadata) error {
-	if meta == nil || !meta.RotationKnown {
+func commanderReady(cmd adb.Commander) bool {
+	if cmd == nil {
+		return false
+	}
+	if c, ok := cmd.(*adb.Client); ok {
+		return c != nil
+	}
+	return true
+}
+
+func validateFrameActionSpace(cmd adb.Commander, meta *frameartifact.Metadata) error {
+	if meta == nil || !commanderReady(cmd) {
 		return nil
 	}
-	rotation, err := input.CurrentRotation(cmd)
-	if err != nil {
-		return staleFrameError{"cannot verify current rotation; observe again"}
+	w, h, err := input.CurrentScreenSize(cmd)
+	if err == nil && w > 0 && h > 0 {
+		if input.SameOrientedSize(meta.ActionWidth, meta.ActionHeight, w, h) {
+			return nil
+		}
+		return staleFrameError{"screen orientation or size changed since this frame; observe again"}
+	}
+	if !meta.RotationKnown {
+		return nil
+	}
+	rotation, rotErr := input.CurrentRotation(cmd)
+	if rotErr != nil {
+		return staleFrameError{"cannot verify current screen; observe again"}
 	}
 	if rotation != meta.Rotation {
 		return staleFrameError{"screen rotated since this frame; observe again"}

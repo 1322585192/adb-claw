@@ -95,7 +95,7 @@
   "workflow_hints": {
     "image_only": "The only perception input is a JPEG file from observe or frame.latest. Do not request a UI tree.",
     "normalized_coords": "All model actions use a 1000x1000 (0-999) grid plus the latest frame_token. Bare pixels and unbound normalized actions are rejected.",
-    "stale_frame": "STALE_FRAME means the screen changed or the frame aged out. Call frame.latest again before acting.",
+    "stale_frame": "STALE_FRAME means the frame action size no longer matches the live screen, or the token expired. Observe again. Do not treat rotation 0 vs 1 as stale when the JPEG is already the current width x height.",
     "no_sleep": "Never insert sleep, time.sleep, adb-claw shell sleep, or a timed pause. Use an action's --wait-changed or wait --changed --after-frame.",
     "wait_after": "One-shot CLI: an action with --wait-changed returns the next unique JPEG path. Without it, use wait --changed --after-frame. Serve uses frame.wait_after.",
     "unicode": "Focus the field and call type. Unicode uses adb-claw's embedded app_process ACTION_SET_TEXT helper. Never install ADBKeyboard, change IME, or call the raw clipboard service.",

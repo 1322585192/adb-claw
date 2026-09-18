@@ -80,9 +80,30 @@ func CurrentScreenSize(cmd adb.Commander) (width, height int, err error) {
 	return w, h, nil
 }
 
+// SameOrientedSize reports whether a frame's action pixels match the live
+// oriented screen. Rotation 0 vs 1 is ignored when the JPEG is already the
+// current width×height (pump sidecars often store 0 on a landscape frame).
+func SameOrientedSize(actionW, actionH, screenW, screenH int) bool {
+	if actionW <= 0 || actionH <= 0 || screenW <= 0 || screenH <= 0 {
+		return false
+	}
+	dw := actionW - screenW
+	dh := actionH - screenH
+	if dw < 0 {
+		dw = -dw
+	}
+	if dh < 0 {
+		dh = -dh
+	}
+	return dw <= 2 && dh <= 2
+}
+
 // CurrentRotation returns the current Surface rotation (0-3). OEM Android
 // builds expose it under several field names and sometimes as degrees.
 func CurrentRotation(cmd adb.Commander) (int, error) {
+	if cmd == nil {
+		return 0, fmt.Errorf("could not determine current display rotation")
+	}
 	queries := [][]string{
 		{"dumpsys", "window", "displays"},
 		{"dumpsys", "input"},

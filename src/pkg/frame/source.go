@@ -230,6 +230,7 @@ func (s *Source) readLoop(ctx context.Context, r io.Reader) {
 			return
 		}
 		f.Source = "dex"
+		f.RotationKnown = true
 		s.accept(f)
 	}
 }

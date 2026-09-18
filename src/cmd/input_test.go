@@ -65,10 +65,16 @@ func TestParsePointRawMustBeExplicit(t *testing.T) {
 	}
 }
 
-type rotationCommander struct{ output string }
+type rotationCommander struct {
+	size string
+	rot  string
+}
 
 func (c *rotationCommander) Shell(args ...string) (*adb.Result, error) {
-	return &adb.Result{Stdout: c.output}, nil
+	if len(args) >= 2 && args[0] == "wm" && args[1] == "size" {
+		return &adb.Result{Stdout: c.size}, nil
+	}
+	return &adb.Result{Stdout: c.rot}, nil
 }
 func (c *rotationCommander) ExecOut(args ...string) ([]byte, error) {
 	return nil, fmt.Errorf("not implemented")
@@ -77,13 +83,32 @@ func (c *rotationCommander) RawCommand(args ...string) (*adb.Result, error) {
 	return nil, fmt.Errorf("not implemented")
 }
 
-func TestValidateFrameRotationRejectsOldToken(t *testing.T) {
-	meta := &frameartifact.Metadata{Rotation: 1, RotationKnown: true}
-	if err := validateFrameRotation(&rotationCommander{output: "mCurrentRotation=1"}, meta); err != nil {
-		t.Fatalf("matching rotation: %v", err)
+func TestValidateFrameActionSpaceAllowsRotationMismatchWhenSizeMatches(t *testing.T) {
+	cmd := &rotationCommander{
+		size: "Physical size: 1264x2780\n",
+		rot:  "mCurrentRotation=1",
 	}
-	err := validateFrameRotation(&rotationCommander{output: "mCurrentRotation=0"}, meta)
+	// Pump often stores rotation 0 on an already-landscape JPEG.
+	meta := &frameartifact.Metadata{
+		ActionWidth: 2780, ActionHeight: 1264,
+		Rotation: 0, RotationKnown: true,
+	}
+	if err := validateFrameActionSpace(cmd, meta); err != nil {
+		t.Fatalf("landscape action space should stay valid: %v", err)
+	}
+}
+
+func TestValidateFrameActionSpaceRejectsPortraitTokenOnLandscape(t *testing.T) {
+	cmd := &rotationCommander{
+		size: "Physical size: 1264x2780\n",
+		rot:  "mCurrentRotation=1",
+	}
+	meta := &frameartifact.Metadata{
+		ActionWidth: 1264, ActionHeight: 2780,
+		Rotation: 0, RotationKnown: true,
+	}
+	err := validateFrameActionSpace(cmd, meta)
 	if _, ok := err.(staleFrameError); !ok {
-		t.Fatalf("rotation change error = %T %v, want staleFrameError", err, err)
+		t.Fatalf("portrait token on landscape screen = %T %v, want staleFrameError", err, err)
 	}
 }

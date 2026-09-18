@@ -8,7 +8,7 @@ Use this page during a Gemini 3.8 Flash control loop. Perception is a JPEG file 
 2. Read its unique `screenshot.path` and keep `frame_token`. Do not paste JSON or reuse an older path.
 3. Act with that token and 0–999 coordinates: `adb-claw tap --normalized X Y --frame FRAME_TOKEN --wait-changed 1500`.
 4. Read the returned `screenshot.path` directly. It has a new token for the next action; never add `sleep`.
-5. If `STALE_FRAME`, observe again. Rotation invalidates the previous token.
+5. If `STALE_FRAME`, observe again. A token is invalid when its action width/height no longer match the live screen (true rotate). A pump frame that is already landscape is still valid if dumpsys says rotation 1 and the sidecar says 0.
 
 ## Defaults for Gemini 3.8 Flash
 

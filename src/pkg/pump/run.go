@@ -98,7 +98,7 @@ func latestFromFrame(f *frame.Frame, key string, opts Options) stream.Latest {
 		ImageWidth:    int(f.ImageWidth),
 		ImageHeight:   int(f.ImageHeight),
 		Rotation:      int(f.Rotation),
-		RotationKnown: true,
+		RotationKnown: f.RotationKnown,
 		Complete:      true,
 		Quality:       opts.Quality,
 		Width:         opts.Width,

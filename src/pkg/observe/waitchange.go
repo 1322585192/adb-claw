@@ -41,7 +41,7 @@ func WaitForChange(cmd adb.Commander, baseline *frameartifact.Metadata, timeout,
 			})
 		}
 		if stream.Running(key) || stream.Fresh(key, 3*time.Second) {
-			return waitStreamChange(key, baseline, timeout, interval)
+			return waitStreamChange(cmd, key, baseline, timeout, interval)
 		}
 	}
 

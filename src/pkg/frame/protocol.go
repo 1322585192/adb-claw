@@ -35,12 +35,13 @@ type Header struct {
 // Frame is one decoded screen frame plus host-side receive metadata.
 type Frame struct {
 	Header
-	JPEG       []byte
-	Hash       string
-	ReceivedAt time.Time
-	TransferMs int64
-	Duplicate  bool
-	Source     string
+	JPEG          []byte
+	Hash          string
+	ReceivedAt    time.Time
+	TransferMs    int64
+	Duplicate     bool
+	Source        string
+	RotationKnown bool
 }
 
 // CapturedAt returns the device capture timestamp.

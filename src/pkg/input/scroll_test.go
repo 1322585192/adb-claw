@@ -121,6 +121,18 @@ func TestGetScreenSizePrefersOverride(t *testing.T) {
 	}
 }
 
+func TestSameOrientedSize(t *testing.T) {
+	if !SameOrientedSize(2780, 1264, 2780, 1264) {
+		t.Fatal("exact match")
+	}
+	if !SameOrientedSize(2780, 1264, 2779, 1265) {
+		t.Fatal("1px OEM rounding should match")
+	}
+	if SameOrientedSize(1264, 2780, 2780, 1264) {
+		t.Fatal("portrait must not match landscape")
+	}
+}
+
 func TestCurrentScreenSizeRotates(t *testing.T) {
 	cmd := &fakeSizeCmd{size: "Physical size: 1080x2340\n", rot: "mCurrentRotation=1"}
 	w, h, err := CurrentScreenSize(cmd)
