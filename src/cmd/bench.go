@@ -127,6 +127,6 @@ func int64s(in []int) []int64 {
 
 func init() {
 	benchCmd.Flags().IntVar(&benchRounds, "rounds", 5, "Samples per measurement")
-	benchCmd.Flags().IntVar(&benchWidth, "width", frame.WidthHigh, "Screenshot preview width")
+	benchCmd.Flags().IntVar(&benchWidth, "width", 0, "Optional max screenshot width (0 = native aspect)")
 	rootCmd.AddCommand(benchCmd)
 }

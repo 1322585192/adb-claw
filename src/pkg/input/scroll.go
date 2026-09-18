@@ -11,24 +11,52 @@ import (
 
 var wmSizeRe = regexp.MustCompile(`(\d+)x(\d+)`)
 
-// GetScreenSize returns the physical screen width and height.
+// GetScreenSize returns the current logical screen width and height.
+// An override size is preferred because that is the coordinate space
+// used by input and by a complete screenshot.
 func GetScreenSize(cmd adb.Commander) (width, height int, err error) {
 	result, err := cmd.Shell("wm", "size")
 	if err != nil {
 		return 0, 0, fmt.Errorf("wm size failed: %w", err)
 	}
-	// Parse "Physical size: 1080x2400"
-	for _, line := range strings.Split(result.Stdout, "\n") {
-		if strings.Contains(line, "Physical size") {
-			m := wmSizeRe.FindStringSubmatch(line)
-			if len(m) == 3 {
-				w, _ := strconv.Atoi(m[1])
-				h, _ := strconv.Atoi(m[2])
-				return w, h, nil
+	w, h, ok := ParseWMSize(result.Stdout)
+	if !ok {
+		return 0, 0, fmt.Errorf("could not parse screen size from: %s", strings.TrimSpace(result.Stdout))
+	}
+	return w, h, nil
+}
+
+// ParseWMSize reads `wm size` output. Override size wins over physical size.
+func ParseWMSize(stdout string) (width, height int, ok bool) {
+	var physicalW, physicalH, overrideW, overrideH int
+	for _, line := range strings.Split(stdout, "\n") {
+		m := wmSizeRe.FindStringSubmatch(line)
+		if len(m) != 3 {
+			continue
+		}
+		w, _ := strconv.Atoi(m[1])
+		h, _ := strconv.Atoi(m[2])
+		if w <= 0 || h <= 0 {
+			continue
+		}
+		switch {
+		case strings.Contains(line, "Override size"):
+			overrideW, overrideH = w, h
+		case strings.Contains(line, "Physical size"):
+			physicalW, physicalH = w, h
+		default:
+			if physicalW == 0 {
+				physicalW, physicalH = w, h
 			}
 		}
 	}
-	return 0, 0, fmt.Errorf("could not parse screen size from: %s", strings.TrimSpace(result.Stdout))
+	if overrideW > 0 && overrideH > 0 {
+		return overrideW, overrideH, true
+	}
+	if physicalW > 0 && physicalH > 0 {
+		return physicalW, physicalH, true
+	}
+	return 0, 0, false
 }
 
 // CurrentScreenSize returns width/height in the current rotation.

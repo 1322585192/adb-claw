@@ -21,7 +21,7 @@
     {
       "name": "take_screenshot",
       "description": "Read the latest screen JPEG. Never looks at UI text nodes.",
-      "usage": "adb-claw observe --width 720 --quality 60   OR serve frame.latest",
+      "usage": "adb-claw observe --quality 60   OR serve frame.latest",
       "returns": "path, frame_seq (serve), device/image size, scale, frame_age_ms",
       "when_to_use": "Before deciding an action. Read the image file. Do not paste JSON."
     },
@@ -64,7 +64,7 @@
     {
       "name": "serve",
       "description": "Persistent JSONL session: frame.latest / frame.wait_after / act / device.info.",
-      "usage": "adb-claw serve --stdio [--width 720]",
+      "usage": "adb-claw serve --stdio",
       "when_to_use": "Gemini 3.8 Flash adapters. Image bytes stay on disk; JSON only has path + frame_seq."
     },
     {
@@ -76,7 +76,7 @@
     {
       "name": "bench",
       "description": "Measure first frame, screenshot, latest write, and normalized tap latency.",
-      "usage": "adb-claw bench [--rounds 5] [--width 720]",
+      "usage": "adb-claw bench [--rounds 5] [--width px]",
       "when_to_use": "To collect a repeatable image-only latency baseline."
     },
     {

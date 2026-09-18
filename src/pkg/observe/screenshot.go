@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/llm-net/adb-claw/pkg/adb"
+	"github.com/llm-net/adb-claw/pkg/input"
 	"github.com/llm-net/adb-claw/pkg/perf"
 
 	"golang.org/x/image/draw"
@@ -20,8 +21,10 @@ import (
 // DefaultJPEGQuality is the default JPEG encoding quality (1-100).
 const DefaultJPEGQuality = 60
 
-// DefaultObserveWidth is the default preview width for observe/serve frames.
-const DefaultObserveWidth = 720
+// DefaultObserveWidth is 0: emit the full logical display at its native
+// aspect ratio. --width N is an optional uniform downscale cap, not a
+// fixed output size such as 720×1560.
+const DefaultObserveWidth = 0
 
 // DefaultObserveFileName is the temp file used when observe does not get --file.
 const DefaultObserveFileName = "adb-claw-observe"
@@ -44,17 +47,20 @@ type CaptureOptions struct {
 // encoded preview. DeviceWidth/Height are the live screen pixels used to map
 // the 0–999 normalized action grid.
 type ScreenshotResult struct {
-	Format       string         `json:"format"`
-	Path         string         `json:"path"`
-	Size         int            `json:"size_bytes"`
-	DeviceWidth  int            `json:"device_width"`
-	DeviceHeight int            `json:"device_height"`
-	ImageWidth   int            `json:"image_width"`
-	ImageHeight  int            `json:"image_height"`
-	Scale        float64        `json:"scale"`
-	Mode         string         `json:"mode,omitempty"`
-	Profile      *TimingProfile `json:"profile,omitempty"`
-	Bytes        []byte         `json:"-"`
+	Format        string         `json:"format"`
+	Path          string         `json:"path"`
+	Size          int            `json:"size_bytes"`
+	DeviceWidth   int            `json:"device_width"`
+	DeviceHeight  int            `json:"device_height"`
+	ImageWidth    int            `json:"image_width"`
+	ImageHeight   int            `json:"image_height"`
+	Scale         float64        `json:"scale"`
+	DisplayWidth  int            `json:"display_width,omitempty"`
+	DisplayHeight int            `json:"display_height,omitempty"`
+	Complete      bool           `json:"complete"`
+	Mode          string         `json:"mode,omitempty"`
+	Profile       *TimingProfile `json:"profile,omitempty"`
+	Bytes         []byte         `json:"-"`
 }
 
 // ObserveOptions controls a screenshot-only observe call.
@@ -122,21 +128,21 @@ func CaptureScreenshot(cmd adb.Commander, opts CaptureOptions) (*ScreenshotResul
 	if err != nil {
 		return nil, err
 	}
-	if len(raw) == 0 {
-		return nil, fmt.Errorf("screencap returned empty data")
-	}
-	if len(raw) < 8 || string(raw[1:4]) != "PNG" {
-		return nil, fmt.Errorf("screencap returned invalid PNG data (%d bytes)", len(raw))
-	}
-
-	src, err := png.Decode(bytes.NewReader(raw))
+	src, err := decodePNG(raw)
 	profile.DecodeMs = clock.Lap()
 	if err != nil {
-		return nil, fmt.Errorf("decode screencap: %w", err)
+		return nil, err
 	}
+
+	displayW, displayH, haveDisplay := logicalDisplaySize(cmd)
+	src, raw, mode = recaptureIfIncomplete(cmd, src, raw, mode, displayW, displayH, haveDisplay, profile)
 	srcBounds := src.Bounds()
 	deviceW := srcBounds.Dx()
 	deviceH := srcBounds.Dy()
+	complete := !haveDisplay || captureComplete(deviceW, deviceH, displayW, displayH)
+	if complete && haveDisplay {
+		deviceW, deviceH = matchDisplayOrientation(deviceW, deviceH, displayW, displayH)
+	}
 
 	outImg := src
 	if opts.MaxWidth > 0 && deviceW > opts.MaxWidth {
@@ -164,21 +170,107 @@ func CaptureScreenshot(cmd adb.Commander, opts CaptureOptions) (*ScreenshotResul
 	profile.TotalMs = clock.Total()
 
 	result := &ScreenshotResult{
-		Format:       opts.Format,
-		Path:         opts.Path,
-		Size:         len(data),
-		DeviceWidth:  deviceW,
-		DeviceHeight: deviceH,
-		ImageWidth:   imageW,
-		ImageHeight:  imageH,
-		Scale:        scaleFactor(imageW, deviceW),
-		Mode:         string(mode),
-		Bytes:        data,
+		Format:        opts.Format,
+		Path:          opts.Path,
+		Size:          len(data),
+		DeviceWidth:   deviceW,
+		DeviceHeight:  deviceH,
+		ImageWidth:    imageW,
+		ImageHeight:   imageH,
+		Scale:         scaleFactor(imageW, deviceW),
+		DisplayWidth:  displayW,
+		DisplayHeight: displayH,
+		Complete:      complete,
+		Mode:          string(mode),
+		Bytes:         data,
 	}
 	if opts.Profile {
 		result.Profile = profile
 	}
 	return result, nil
+}
+
+func decodePNG(raw []byte) (image.Image, error) {
+	if len(raw) == 0 {
+		return nil, fmt.Errorf("screencap returned empty data")
+	}
+	if len(raw) < 8 || string(raw[1:4]) != "PNG" {
+		return nil, fmt.Errorf("screencap returned invalid PNG data (%d bytes)", len(raw))
+	}
+	src, err := png.Decode(bytes.NewReader(raw))
+	if err != nil {
+		return nil, fmt.Errorf("decode screencap: %w", err)
+	}
+	return src, nil
+}
+
+func logicalDisplaySize(cmd adb.Commander) (int, int, bool) {
+	w, h, err := input.GetScreenSize(cmd)
+	if err != nil || w <= 0 || h <= 0 {
+		return 0, 0, false
+	}
+	return w, h, true
+}
+
+func recaptureIfIncomplete(cmd adb.Commander, src image.Image, raw []byte, mode CaptureMode, displayW, displayH int, haveDisplay bool, profile *TimingProfile) (image.Image, []byte, CaptureMode) {
+	if !haveDisplay || captureComplete(src.Bounds().Dx(), src.Bounds().Dy(), displayW, displayH) {
+		return src, raw, mode
+	}
+
+	attempts := []struct {
+		mode CaptureMode
+		run  func() ([]byte, error)
+	}{
+		{CaptureModePull, func() ([]byte, error) { return capturePNG(cmd, CaptureModePull, profile) }},
+		{CaptureModeStream, func() ([]byte, error) { return cmd.ExecOut("screencap", "-d", "0", "-p") }},
+		{CaptureModeStream, func() ([]byte, error) { return cmd.ExecOut("screencap", "-p") }},
+	}
+	bestSrc, bestRaw, bestMode := src, raw, mode
+	bestArea := src.Bounds().Dx() * src.Bounds().Dy()
+	for _, attempt := range attempts {
+		nextRaw, err := attempt.run()
+		if err != nil {
+			continue
+		}
+		nextSrc, err := decodePNG(nextRaw)
+		if err != nil {
+			continue
+		}
+		if captureComplete(nextSrc.Bounds().Dx(), nextSrc.Bounds().Dy(), displayW, displayH) {
+			return nextSrc, nextRaw, attempt.mode
+		}
+		if area := nextSrc.Bounds().Dx() * nextSrc.Bounds().Dy(); area > bestArea {
+			bestSrc, bestRaw, bestMode, bestArea = nextSrc, nextRaw, attempt.mode, area
+		}
+	}
+	return bestSrc, bestRaw, bestMode
+}
+
+func captureComplete(capW, capH, dispW, dispH int) bool {
+	if dispW <= 0 || dispH <= 0 || capW <= 0 || capH <= 0 {
+		return true
+	}
+	return sameAspectSize(capW, capH, dispW, dispH) || sameAspectSize(capW, capH, dispH, dispW)
+}
+
+func sameAspectSize(capW, capH, dispW, dispH int) bool {
+	if capW == dispW && capH == dispH {
+		return true
+	}
+	wantH := dispH * capW / dispW
+	delta := capH - wantH
+	if delta < 0 {
+		delta = -delta
+	}
+	tolerance := 2 + wantH/50
+	return delta <= tolerance
+}
+
+func matchDisplayOrientation(capW, capH, dispW, dispH int) (int, int) {
+	if sameAspectSize(capW, capH, dispH, dispW) && !sameAspectSize(capW, capH, dispW, dispH) {
+		return dispH, dispW
+	}
+	return dispW, dispH
 }
 
 func capturePNG(cmd adb.Commander, mode CaptureMode, profile *TimingProfile) ([]byte, error) {

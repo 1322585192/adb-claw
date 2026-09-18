@@ -9,7 +9,7 @@ import (
 func TestScrollDirection(t *testing.T) {
 	// Screen: 1080x2400
 	tests := []struct {
-		direction      string
+		direction       string
 		wantY1GreaterY2 bool // true if y1 > y2 (swipe from bottom to top)
 		wantX1GreaterX2 bool // true if x1 > x2 (swipe from right to left)
 	}{
@@ -107,6 +107,17 @@ func TestScrollInBounds(t *testing.T) {
 	}
 	if y2 < 400 || y2 > 1600 {
 		t.Errorf("y2=%d out of bounds [400, 1600]", y2)
+	}
+}
+
+func TestGetScreenSizePrefersOverride(t *testing.T) {
+	cmd := &fakeSizeCmd{size: "Physical size: 1080x2340\nOverride size: 720x1600\n"}
+	w, h, err := GetScreenSize(cmd)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w != 720 || h != 1600 {
+		t.Fatalf("logical size = %dx%d, want 720x1600", w, h)
 	}
 }
 

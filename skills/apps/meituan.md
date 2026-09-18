@@ -205,12 +205,12 @@ adb-claw wait --activity "com.meituan.android.pt.homepage.activity.MainActivity"
 adb-claw open 'imeituan://www.meituan.com/search?q=火锅'
 
 # 方式 2: 手动搜索（内置 Unicode 输入）
-adb-claw observe --width 720
+adb-claw observe
 adb-claw tap --normalized X Y
 adb-claw clear-field
 adb-claw type "火锅"
 adb-claw key ENTER
-adb-claw observe --width 720
+adb-claw observe
 ```
 
 ### 查找外卖餐厅
@@ -225,7 +225,7 @@ adb-claw open 'imeituan://www.meituan.com/search?q=肯德基'
 adb-claw open 'imeituan://www.meituan.com/waimai'
 # 外卖首页分类图标下方是餐厅列表，需先滚动
 adb-claw scroll down           # 滚一页后餐厅卡片进入视野
-adb-claw observe --width 720   # 截屏确认当前视野和餐厅名
+adb-claw observe   # 截屏确认当前视野和餐厅名
 adb-claw tap --normalized 500 400
 
 # 方式 3: 按分类浏览
@@ -249,10 +249,10 @@ adb-claw scroll down
 # 商家页是 WebView / RN，按当前 JPEG 使用归一化坐标
 # 方式 A: 点击菜品进入商品详情页（WMMPActivity）
 adb-claw tap --normalized X Y      # 点菜品图片/名称区域
-adb-claw observe --width 720       # 确认进入商品详情
+adb-claw observe       # 确认进入商品详情
 # 在详情页点击"加入购物车"（价格条右侧）
 adb-claw tap --normalized X Y
-adb-claw observe --width 720
+adb-claw observe
 adb-claw key BACK                 # 返回菜单继续选
 
 # 方式 B: 直接点菜品右侧的"+"按钮
@@ -288,7 +288,7 @@ adb-claw open 'imeituan://www.meituan.com/waimai'
 
 ```bash
 # 策略 1: 看截图找关闭/"残忍离开"/"取消"/"以后再说"，用 --normalized 点
-adb-claw observe --width 720
+adb-claw observe
 adb-claw tap --normalized 500 700
 
 # 策略 2: 按返回键

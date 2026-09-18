@@ -90,14 +90,14 @@ adb-claw observe
 
 # RIGHT — act, then see or wait for a change
 adb-claw tap --normalized 500 500
-adb-claw observe --width 720
+adb-claw observe
 ```
 
 ## Why ADB Claw
 
 - **Image-only observe** — `observe` / `frame.latest` writes a JPEG. JSON never includes image bytes or base64.
 - **Normalized actions** — Model tools use a 1000×1000 (0–999) grid. adb-claw maps onto the live `device_width` × `device_height`.
-- **Persistent frame source** — `serve` keeps a latest-frame buffer (720p, adaptive 540p) so Flash does not relaunch ADB per click.
+- **Persistent frame source** — `serve` keeps a latest-frame buffer at the device's native aspect (optional uniform downscale if frames are stale) so Flash does not relaunch ADB per click.
 - **Built-in Unicode input** — focus a field, then `adb-claw type "中文"`; no APK or IME change
 - **Deep links reduce steps** — prefer `adb-claw open 'app://search?keyword=中文'` when a profile provides one
 - **Wait without sleep** — `wait --changed` or `frame.wait_after` for a new visual hash; `wait --activity` for navigation.
@@ -172,19 +172,19 @@ Read `RUNTIME.md` for the live loop. Default model settings for the external ada
 - `media_resolution=medium` (single-turn `high` only for dense small text)
 
 ```bash
-# 1. See the screen (JPEG file, default 720px / quality 60)
-adb-claw observe --width 720 --quality 60
+# 1. See the screen (JPEG file, native aspect / quality 60)
+adb-claw observe --quality 60
 
 # 2. Act on the 0-999 grid (center of the screen)
 adb-claw tap --normalized 500 500
 
 # 3. Next command immediately — no sleep in between
-adb-claw observe --width 720 --quality 60
+adb-claw observe --quality 60
 ```
 
 `observe` writes a JPEG to `data.screenshot.path`. **Read that file.** Do not paste the JSON into notes.
 
-**Never tap JPEG pixel coordinates.** Always use `--normalized` (or serve `act` with 0–999) so 720/540/rotation cannot shift the hit point.
+**Never tap JPEG pixel coordinates.** Always use `--normalized` (or serve `act` with 0–999) so preview scale or rotation cannot shift the hit point.
 
 For CJK apps, prefer deep links; if none exists, focus the field and use built-in Unicode input:
 
@@ -220,8 +220,8 @@ App Profiles are knowledge bases — deep links, visual landmarks, device-specif
 ### observe — Screenshot Frame
 
 ```bash
-adb-claw observe                         # 720px JPEG + size metadata
-adb-claw observe --width 720 --quality 60
+adb-claw observe                         # native-aspect JPEG + size metadata
+adb-claw observe --width 540 --quality 60  # optional uniform downscale
 adb-claw observe --capture pull          # Faster on TCP/SSH ADB
 adb-claw observe --profile
 ```
@@ -274,19 +274,19 @@ adb-claw wait --activity .MainActivity
 ### serve — Persistent JSONL Session
 
 ```bash
-adb-claw serve --stdio --width 720
+adb-claw serve --stdio
 ```
 
 Methods: `ping`, `frame.latest`, `frame.wait_after`, `act`, `device.info`, `close`.
 
 `frame.latest` writes `latest.jpg` and returns `frame_seq`, `frame_age_ms`, rotation, device/image size, scale, and `path`. `act` requires that `frame_seq` and 0–999 coordinates. Stale or changed frames return `STALE_FRAME`.
 
-A session starts at 720p/q60 and may drop to 540p/q50. It does not auto-upgrade.
+A session starts at the device's native aspect (quality 60) and may drop to a 540px-wide uniform scale if frames are stale. It does not auto-upgrade.
 
 ### bench
 
 ```bash
-adb-claw bench --rounds 5 --width 720
+adb-claw bench --rounds 5
 ```
 
 ### screen / app / shell / file / device

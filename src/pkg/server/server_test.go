@@ -24,7 +24,7 @@ type mockCmd struct {
 func (m *mockCmd) Shell(args ...string) (*adb.Result, error) {
 	m.shells = append(m.shells, append([]string{}, args...))
 	if strings.Contains(strings.Join(args, " "), "ADBClawInput") {
-		return &adb.Result{Stdout: "OK\n"}, nil
+		return &adb.Result{Stdout: "OK SET_TEXT\n"}, nil
 	}
 	if len(args) >= 1 && args[0] == "input" {
 		m.taps = append(m.taps, strings.Join(args, " "))
@@ -241,8 +241,10 @@ func TestActTypesUnicodeWithBuiltInHelper(t *testing.T) {
 		t.Fatalf("response must expose Unicode transport: %s", raw)
 	}
 	joined := fmt.Sprint(cmd.shells)
-	if !strings.Contains(joined, "ADBClawInput") ||
-		!strings.Contains(joined, "KEYCODE_PASTE") {
-		t.Fatalf("missing helper/paste calls: %v", cmd.shells)
+	if !strings.Contains(joined, "ADBClawInput") {
+		t.Fatalf("missing Unicode helper call: %v", cmd.shells)
+	}
+	if strings.Contains(joined, "KEYCODE_PASTE") {
+		t.Fatalf("SET_TEXT must not fall back to system paste: %v", cmd.shells)
 	}
 }

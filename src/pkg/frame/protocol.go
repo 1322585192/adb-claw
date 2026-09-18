@@ -73,16 +73,11 @@ func (f *Frame) Scale() float64 {
 	return float64(f.ImageWidth) / float64(f.DeviceWidth)
 }
 
-// ResolutionBucket is 720, 540, or the image width when smaller.
+// ResolutionBucket is the encoded image width. Native frames report the
+// real pixel width rather than a fixed 720/540 bucket.
 func (f *Frame) ResolutionBucket() int {
 	if f == nil {
 		return 0
-	}
-	if int(f.ImageWidth) >= WidthHigh {
-		return WidthHigh
-	}
-	if int(f.ImageWidth) >= WidthLow {
-		return WidthLow
 	}
 	return int(f.ImageWidth)
 }

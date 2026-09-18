@@ -17,4 +17,4 @@ if [[ -n "$SERIAL" ]]; then
   args+=(-s "$SERIAL")
 fi
 
-"$BIN" "${args[@]}" bench --rounds "$ROUNDS" --width 720
+"$BIN" "${args[@]}" bench --rounds "$ROUNDS"

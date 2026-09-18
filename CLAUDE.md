@@ -76,7 +76,7 @@ Go 1.24，依赖 cobra v1.10.2 + golang.org/x/image v0.36.0。
 - **图片-only** — observe / serve 只返回 JPEG 路径，不返回 UI 节点
 - **归一化坐标** — Skill 使用 `--normalized`；CLI 仍接受设备像素
 - **Frame DEX** — `UiAutomation.takeScreenshot()` + 设备端 JPEG；写阻塞时丢中间帧
-- **自适应** — 默认 720/q60，帧龄或传输 P95 超门槛降到 540/q50，会话内不自动升档
+- **自适应** — 默认原分辨率/q60，帧龄或传输 P95 超门槛按原比例降到宽 540/q50，会话内不自动升档
 - **回退** — DEX 不可用时回退 `screencap`，绝不回退文本树
 - **文本输入安全** — ASCII 走 `adb shell input text`；Unicode 由内嵌 DEX 设置剪贴板并粘贴，不安装 APK、不切换 IME
 
@@ -85,7 +85,7 @@ Go 1.24，依赖 cobra v1.10.2 + golang.org/x/image v0.36.0。
 ```
 adb-claw
 ├── device list | info
-├── observe [--width 720] [--quality 60] [--capture auto|stream|pull] [--profile]
+├── observe [--width px] [--quality 60] [--capture auto|stream|pull] [--profile]
 ├── screenshot [--file path] [--width px]
 ├── tap <x> <y> [--normalized]
 ├── long-press <x> <y> [--duration ms] [--normalized]
@@ -96,7 +96,7 @@ adb-claw
 ├── open <uri>
 ├── scroll <up|down|left|right> [--pages N] [--distance px]
 ├── wait --activity|--changed [--gone] [--timeout ms]
-├── serve --stdio [--width 720]
+├── serve --stdio [--width px]
 ├── bench [--rounds N] [--width px]
 ├── screen status|on|off|unlock|rotation
 ├── app list|current|launch|stop|install|uninstall|clear

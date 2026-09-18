@@ -4,7 +4,7 @@ Use this page during a Gemini 3.8 Flash control loop. Perception is a JPEG file 
 
 ## Fast loop
 
-1. `frame.latest` (or `adb-claw observe --width 720 --quality 60`)
+1. `frame.latest` (or `adb-claw observe --quality 60`)
 2. Read `path`. Do not paste JSON. Do not look for UI text nodes.
 3. `act` with that `frame_seq` and 0–999 coordinates (`adb-claw tap --normalized X Y`)
 4. Read the next frame immediately — no `sleep`. In serve, use `frame.wait_after` only if the image must change before deciding; it returns the JPEG path, so do not follow it with `frame.latest`.
@@ -45,8 +45,8 @@ Focus the field, then call `adb-claw type TEXT`. ASCII uses `adb shell input tex
 ## Persistent session
 
 ```text
-adb-claw serve --stdio --width 720
+adb-claw serve --stdio
 ```
 
 Methods: `frame.latest` → `act {frame_seq, action, x, y}` → `frame.wait_after`.
-Frames start at 720p/q60 and may drop to 540p/q50 for the rest of the session.
+Frames keep the device's native aspect (quality 60) and may drop to a 540px-wide uniform scale if they are stale.
