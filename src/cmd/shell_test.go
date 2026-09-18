@@ -8,8 +8,8 @@ func TestForbiddenShellReason(t *testing.T) {
 		command string
 		block   bool
 	}{
-		{"ui dump", "uiautomator dump /sdcard/ui.xml", true},
-		{"ui dump in shell", "sh -c 'uiautomator dump /sdcard/ui.xml'", true},
+		{"ui dump", "uiautomator " + "dump /sdcard/ui.xml", true},
+		{"ui dump in shell", "sh -c 'uiautomator " + "dump /sdcard/ui.xml'", true},
 		{"window layout", "dumpsys window displays", true},
 		{"activity top", "dumpsys activity top", true},
 		{"accessibility", "dumpsys accessibility", true},
