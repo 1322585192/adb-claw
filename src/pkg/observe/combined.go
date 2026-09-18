@@ -22,15 +22,27 @@ func Observe(cmd adb.Commander, opts ObserveOptions) *ObserveResult {
 	if path == "" {
 		path = DefaultObservePath(format)
 	}
-	ss, err := CaptureScreenshot(cmd, CaptureOptions{
-		MaxWidth:  opts.MaxWidth,
-		MaxPixels: opts.MaxPixels,
-		Format:    format,
-		Quality:   opts.Quality,
-		Path:      path,
-		Mode:      opts.Mode,
-		Profile:   opts.Profile,
-	})
+	opts.Path = path
+	opts.Format = format
+
+	var (
+		ss  *ScreenshotResult
+		err error
+	)
+	if useLiveStream(opts) {
+		ss, err = observeFromStream(cmd, opts)
+	}
+	if ss == nil {
+		ss, err = CaptureScreenshot(cmd, CaptureOptions{
+			MaxWidth:  opts.MaxWidth,
+			MaxPixels: opts.MaxPixels,
+			Format:    format,
+			Quality:   opts.Quality,
+			Path:      path,
+			Mode:      opts.Mode,
+			Profile:   opts.Profile,
+		})
+	}
 	if err != nil {
 		result.Errors = append(result.Errors, "screenshot: "+err.Error())
 	} else {

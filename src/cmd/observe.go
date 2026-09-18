@@ -21,12 +21,14 @@ var (
 var observeCmd = &cobra.Command{
 	Use:   "observe",
 	Short: "Capture a screenshot frame for visual analysis",
-	Long: `Captures a JPEG screenshot and writes it to a file.
+	Long: `Copies the newest livestream JPEG to a unique file and frame token.
 
-JSON never includes image bytes or base64 — only the file path and size/scale
-metadata. Read the unique data.screenshot.path and retain frame_token. Act with
---normalized 0-999 coordinates plus --frame TOKEN; coordinates map to that
-frame's action_width / action_height.`,
+A background pump keeps only the latest frame (Frame DEX on USB, screencap
+fallback otherwise). observe does not restart a full PNG capture when the
+pump is running. JSON never includes image bytes or base64. Read the unique
+data.screenshot.path and retain frame_token. Act with --normalized 0-999
+coordinates plus --frame TOKEN; coordinates map to that frame's
+action_width / action_height.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		start := time.Now()
 		writer.Verbose("capturing screenshot frame")

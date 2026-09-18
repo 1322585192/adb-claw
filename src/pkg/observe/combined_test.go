@@ -46,6 +46,7 @@ func TestObserveDefaultPathWritesFile(t *testing.T) {
 }
 
 func TestObserveWritesJPEGFileNoUITree(t *testing.T) {
+	t.Setenv("TMPDIR", t.TempDir())
 	path := filepath.Join(t.TempDir(), "obs.jpg")
 	cmd := &mockObserveCommander{png: solidPNG(1080, 2340)}
 
@@ -74,6 +75,7 @@ func TestObserveWritesJPEGFileNoUITree(t *testing.T) {
 }
 
 func TestObserveScaledPreviewKeepsDeviceSize(t *testing.T) {
+	t.Setenv("TMPDIR", t.TempDir())
 	path := filepath.Join(t.TempDir(), "obs.jpg")
 	cmd := &mockObserveCommander{png: solidPNG(1080, 2340)}
 

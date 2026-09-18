@@ -20,10 +20,10 @@
   "tools": [
     {
       "name": "take_screenshot",
-      "description": "Create a unique screen JPEG and frame token. Never looks at UI text nodes.",
+      "description": "Copy the newest livestream JPEG to a unique path and frame token. Never looks at UI text nodes.",
       "usage": "adb-claw observe --quality 60   OR serve frame.latest",
-      "returns": "unique path, frame_token, hash, captured_at, rotation, action/image size",
-      "when_to_use": "Before deciding an action. Read the returned path and retain its frame_token."
+      "returns": "unique path, frame_token, hash, captured_at, rotation, action/image size, optional frame_age_ms",
+      "when_to_use": "Before deciding an action. Read the returned path and retain its frame_token. Do not sleep; the pump already holds the latest frame."
     },
     {
       "name": "click",
@@ -101,7 +101,8 @@
     "unicode": "Focus the field and call type. Unicode uses adb-claw's embedded app_process ACTION_SET_TEXT helper. Never install ADBKeyboard, change IME, or call the raw clipboard service.",
     "forbidden_shell": "Never use shell for UI hierarchy extraction, layout/accessibility dumpsys, clipboard service calls, or IME changes. Use JPEG perception, app current, and type.",
     "retry_policy": "Empty/error/placeholder screens are valid outcomes. Retry the same hash plus normalized point at most once; never switch to --raw, pull, a fixed path, or node inspection.",
-    "usb_capture": "A physical USB device uses auto/stream. Unique frame paths prevent adapter image caching; do not switch to pull for that symptom.",
+    "usb_capture": "A physical USB device uses auto/stream. A background pump keeps only the newest JPEG; observe copies it. Unique frame paths prevent adapter image caching; do not switch to pull for that symptom.",
+    "live_stream": "observe reads the latest pump frame. Do not restart capture, insert sleep, or treat a static hash as a stale stream.",
     "media": "Adapter default: gemini-3.8-flash, thinking_level=low, media_resolution=medium, inline JPEG. Upgrade to high only for dense small text.",
     "cjk": "Prefer a known deep link to reduce steps; otherwise focus the field and use built-in Unicode type."
   }

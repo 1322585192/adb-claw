@@ -96,7 +96,7 @@ adb-claw tap --normalized 500 500 --frame FRAME_TOKEN --wait-changed 1500
 
 - **Image-only observe** — `observe` / `frame.latest` writes a JPEG. JSON never includes image bytes or base64.
 - **Frame-bound normalized actions** — Model tools use a 1000×1000 (0–999) grid plus the latest `frame_token`. adb-claw maps onto that JPEG's action space and rejects a token from the wrong rotation.
-- **Persistent frame source** — `serve` keeps a latest-frame buffer at the device's native aspect (optional uniform downscale if frames are stale) so Flash does not relaunch ADB per click.
+- **Livestream latest frame** — a background pump keeps only the newest JPEG. `observe` copies that frame; it does not restart PNG screencap when the pump is running. `serve` uses the same capacity-1 buffer.
 - **Built-in Unicode input** — focus a field, then `adb-claw type "中文"`; no APK or IME change
 - **Deep links reduce steps** — prefer `adb-claw open 'app://search?keyword=中文'` when a profile provides one
 - **Wait without sleep** — `wait --changed` or `frame.wait_after` for a new visual hash; `wait --activity` for navigation.
@@ -217,14 +217,14 @@ App Profiles are knowledge bases — deep links, visual landmarks, device-specif
 ### observe — Screenshot Frame
 
 ```bash
-adb-claw observe                         # unique native-aspect JPEG + token/hash
-adb-claw observe --width 540 --quality 60  # optional uniform downscale
+adb-claw observe                         # copy the newest livestream frame + token/hash
+adb-claw observe --width 540 --quality 60  # optional uniform downscale of that frame
 adb-claw observe --max-pixels 650000     # rotation-invariant pixel budget
-adb-claw observe --capture pull          # explicit compatibility/diagnostic mode
+adb-claw observe --capture pull          # one-shot recapture (bench / diagnostics)
 adb-claw observe --profile
 ```
 
-Returns a unique `screenshot.path`, `frame_token`, `hash`, `captured_at`, `rotation`, `action_width` / `action_height`, image size, and scale. No UI elements.
+The first `observe` starts a background pump that keeps only `latest.jpg`. Later `observe` / `--wait-changed` calls copy that newest frame to a unique path. Do not sleep to “wait for a new screenshot”. Returns a unique `screenshot.path`, `frame_token`, `hash`, `captured_at`, `rotation`, `action_width` / `action_height`, image size, and scale. No UI elements.
 
 ### screenshot — Capture Screen
 

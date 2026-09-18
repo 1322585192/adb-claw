@@ -66,19 +66,23 @@ type ScreenshotResult struct {
 	DisplayHeight int            `json:"display_height,omitempty"`
 	Complete      bool           `json:"complete"`
 	Mode          string         `json:"mode,omitempty"`
+	Source        string         `json:"source,omitempty"`
+	FrameSeq      uint32         `json:"frame_seq,omitempty"`
+	FrameAgeMs    int64          `json:"frame_age_ms,omitempty"`
 	Profile       *TimingProfile `json:"profile,omitempty"`
 	Bytes         []byte         `json:"-"`
 }
 
 // ObserveOptions controls a screenshot-only observe call.
 type ObserveOptions struct {
-	MaxWidth  int
-	MaxPixels int
-	Format    string
-	Quality   int
-	Path      string
-	Mode      CaptureMode
-	Profile   bool
+	MaxWidth      int
+	MaxPixels     int
+	Format        string
+	Quality       int
+	Path          string
+	Mode          CaptureMode
+	Profile       bool
+	DisableStream bool
 }
 
 // DefaultObservePath returns the default on-disk path for an observe screenshot.

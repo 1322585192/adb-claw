@@ -4,7 +4,7 @@ Use this page during a Gemini 3.8 Flash control loop. Perception is a JPEG file 
 
 ## Fast loop
 
-1. `adb-claw observe --quality 60`
+1. `adb-claw observe --quality 60` — reads the newest livestream frame (a background pump stays up; do not recapture or sleep)
 2. Read its unique `screenshot.path` and keep `frame_token`. Do not paste JSON or reuse an older path.
 3. Act with that token and 0–999 coordinates: `adb-claw tap --normalized X Y --frame FRAME_TOKEN --wait-changed 1500`.
 4. Read the returned `screenshot.path` directly. It has a new token for the next action; never add `sleep`.
@@ -17,7 +17,7 @@ Use this page during a Gemini 3.8 Flash control loop. Perception is a JPEG file 
 - Inline JPEG from the file at `path`
 - `media_resolution=medium` (upgrade to `high` only for a dense small-text page)
 - Coordinates: Gemini Computer Use 0–999 grid, never preview-image pixels
-- Capture on a USB device: `auto` selects `stream`; do not switch to pull to troubleshoot a stale fixed path
+- Capture on a USB device: `auto` selects `stream`; the pump keeps the latest JPEG. Do not switch to pull to troubleshoot a stale fixed path
 
 ## Do not do this
 

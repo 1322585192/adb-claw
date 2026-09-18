@@ -24,12 +24,13 @@ const deviceDEXPath = "/data/local/tmp/adbclaw-frame.dex"
 
 // Options configure a persistent frame source.
 type Options struct {
-	Interval    time.Duration
-	Width       int
-	Quality     int
-	LatestPath  string
-	ForceHigh   bool
-	DisableDEX  bool
+	Interval   time.Duration
+	Width      int
+	Quality    int
+	LatestPath string
+	ForceHigh  bool
+	DisableDEX bool
+	OnFrame    func(*Frame)
 }
 
 // Source streams the newest screen JPEG from a Frame DEX or screencap fallback.
@@ -74,10 +75,10 @@ func Start(parent context.Context, client *adb.Client, opts Options) (*Source, e
 	}
 	ctx, cancel := context.WithCancel(parent)
 	s := &Source{
-		cmd:   client,
-		opts:  opts,
-		buf:   NewBuffer(),
-		adapt: NewAdaptive(opts.Width, opts.Quality),
+		cmd:    client,
+		opts:   opts,
+		buf:    NewBuffer(),
+		adapt:  NewAdaptive(opts.Width, opts.Quality),
 		cancel: cancel,
 	}
 
@@ -265,6 +266,9 @@ func (s *Source) accept(f *Frame) {
 	s.record(f)
 	if s.opts.LatestPath != "" && !f.Duplicate {
 		_ = WriteAtomic(s.opts.LatestPath, f.JPEG)
+	}
+	if s.opts.OnFrame != nil {
+		s.opts.OnFrame(f)
 	}
 	if s.adapt.Observe(f.Age().Milliseconds(), f.TransferMs) {
 		s.applyResolution()
