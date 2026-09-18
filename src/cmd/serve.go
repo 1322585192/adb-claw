@@ -57,8 +57,8 @@ the device pixels of that frame. A stale or changed frame returns STALE_FRAME.`,
 
 func init() {
 	serveCmd.Flags().BoolVar(&serveStdio, "stdio", true, "Read JSONL from stdin and write JSONL to stdout")
-	serveCmd.Flags().IntVar(&serveWidth, "width", frame.WidthHigh, "Initial frame width (720 or 540)")
+	serveCmd.Flags().IntVar(&serveWidth, "width", 0, "Optional max frame width (0 = native aspect)")
 	serveCmd.Flags().IntVar(&serveQuality, "quality", frame.QualityHigh, "Initial JPEG quality")
-	serveCmd.Flags().BoolVar(&serveForceHigh, "resolution-720", false, "Force a new session to start at 720p")
+	serveCmd.Flags().BoolVar(&serveForceHigh, "resolution-720", false, "Force a new session to start at width 720")
 	rootCmd.AddCommand(serveCmd)
 }

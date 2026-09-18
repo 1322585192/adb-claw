@@ -17,8 +17,9 @@ const (
 	transferP95LimitMs = 500
 )
 
-// Adaptive decides when a session should drop from 720p to 540p.
-// It never auto-upgrades; only a new session or an explicit high width can go back.
+// Adaptive starts at the native display (width 0) and may cap width at
+// WidthLow when frames are stale. Scaling is always uniform, so the
+// device aspect ratio is kept. It never auto-upgrades.
 type Adaptive struct {
 	width   int
 	quality int
@@ -27,9 +28,10 @@ type Adaptive struct {
 	xfers   []int64
 }
 
-// NewAdaptive starts at 720/60 unless width is already 540 or lower.
+// NewAdaptive starts at native size (width 0) / quality 60 unless an
+// explicit positive width is given. Width <= WidthLow locks at 540.
 func NewAdaptive(width, quality int) *Adaptive {
-	a := &Adaptive{width: WidthHigh, quality: QualityHigh}
+	a := &Adaptive{width: 0, quality: QualityHigh}
 	if width > 0 && width <= WidthLow {
 		a.width = WidthLow
 		a.quality = QualityLow
@@ -37,7 +39,7 @@ func NewAdaptive(width, quality int) *Adaptive {
 	} else if width > 0 {
 		a.width = width
 	}
-	if quality > 0 && a.width >= WidthHigh {
+	if quality > 0 && (a.width == 0 || a.width >= WidthHigh) {
 		a.quality = quality
 	}
 	return a

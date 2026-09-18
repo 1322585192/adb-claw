@@ -264,6 +264,33 @@ func TestCaptureScreenshotPullWritesFileAndCleansDevice(t *testing.T) {
 	}
 }
 
+func TestDefaultObserveWidthIsNative(t *testing.T) {
+	if DefaultObserveWidth != 0 {
+		t.Fatalf("DefaultObserveWidth = %d, want 0 (native aspect)", DefaultObserveWidth)
+	}
+}
+
+func TestCaptureScreenshotWidthKeepsDeviceAspect(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "preview.jpg")
+	cmd := &mockCaptureCommander{png: solidPNG(1080, 2340)}
+
+	result, err := CaptureScreenshot(cmd, CaptureOptions{
+		MaxWidth: 720,
+		Format:   "jpeg",
+		Path:     path,
+	})
+	if err != nil {
+		t.Fatalf("CaptureScreenshot: %v", err)
+	}
+	if result.DeviceWidth != 1080 || result.DeviceHeight != 2340 {
+		t.Errorf("device size changed to %dx%d; must stay 1080x2340", result.DeviceWidth, result.DeviceHeight)
+	}
+	if result.ImageWidth != 720 || result.ImageHeight != 1560 {
+		t.Errorf("uniform 720-wide scale = %dx%d, want 720x1560", result.ImageWidth, result.ImageHeight)
+	}
+}
+
 func TestCaptureCompleteAcceptsUniformScale(t *testing.T) {
 	if !captureComplete(720, 1280, 1080, 1920) {
 		t.Fatal("16:9 downscale must count as a complete frame")

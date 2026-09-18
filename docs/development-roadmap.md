@@ -60,7 +60,7 @@
 | 远程截图 pull mode | TCP/SSH ADB 走设备落盘 + adb pull | ✅ |
 | 索引动作快照 | v1：tap --index 使用 observe 快照 | ✅ 后被 v2 删除 |
 | serve JSONL | v1：state_id；v2：frame_seq + 归一化坐标 | ✅ |
-| 图片-only 帧源 | 删除 UI dump，720/540 自适应 JPEG，serve frame.latest/act | ✅ |
+| 图片-only 帧源 | 删除 UI dump，原比例 JPEG（可选等比降宽），serve frame.latest/act | ✅ |
 | `device connect` | 无线 ADB 连接（`adb tcpip` + `adb connect`） |
 
 ### 测试覆盖

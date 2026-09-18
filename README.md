@@ -11,12 +11,12 @@ Android device control CLI — built for AI agents, claws, bots, and LLMs. Pure 
 ### Superpowers — What Sets adb-claw Apart
 
 - **Image-only Computer Use** — Built for Gemini 3.8 Flash. The model sees a JPEG frame (`observe` / `frame.latest`) and acts on a 0–999 grid. No UI tree, no text-node locators.
-- **Persistent frame source** — `serve` keeps a capacity-1 latest JPEG (720p, adaptive 540p) so a realtime loop does not relaunch ADB for every click.
+- **Persistent frame source** — `serve` keeps a capacity-1 latest JPEG at the device's native aspect (optional uniform downscale if frames are stale) so a realtime loop does not relaunch ADB for every click.
 - **Independent audio CLI** — `audio capture` still records REMOTE_SUBMIX (Android 11+) as WAV for external ASR. It is not part of the visual decision loop.
 
 ```bash
 # See the screen, then click the center of the 0-999 grid
-adb-claw observe --width 720 --quality 60
+adb-claw observe --quality 60
 adb-claw tap --normalized 500 500
 
 # Optional: hear what the device hears
@@ -26,7 +26,7 @@ adb-claw audio capture --stream | asrclaw transcribe --stream --lang zh
 ### Core Capabilities
 
 - **Structured JSON output** — Every command returns `{ok, command, data, error, duration_ms, timestamp}` with actionable `suggestion` on errors.
-- **Normalized targeting** — Skill tools use `--normalized` so 720/540/rotation cannot shift the hit point. CLI still accepts device pixels.
+- **Normalized targeting** — Skill tools use `--normalized` so preview scale or rotation cannot shift the hit point. CLI still accepts device pixels.
 - **Built-in Unicode input** — `type "中文"` uses an embedded app_process helper; no APK or IME change.
 - **Deep link navigation** — `open` skips unnecessary UI steps when an app exposes a URI.
 - **Smart scroll** — Auto-calculates swipe coordinates from the current screen size.
@@ -128,7 +128,7 @@ Both platforms use the **Triggers** list in `SKILL.md` to decide when to activat
 
 ```
 adb-claw
-├── observe [--width 720] [--quality 60] [--file]   # JPEG frame only
+├── observe [--width px] [--quality 60] [--file]   # JPEG frame, native aspect
 ├── screenshot [--file path] [--width px]
 ├── tap <x> <y> [--normalized]
 ├── long-press <x> <y> [--duration ms] [--normalized]
@@ -139,7 +139,7 @@ adb-claw
 ├── open <uri>
 ├── scroll <up|down|left|right> [--pages N]
 ├── wait --activity|--changed
-├── serve --stdio [--width 720]
+├── serve --stdio [--width px]
 ├── bench [--rounds N]
 ├── audio capture [--file path] [--duration ms] [--stream]
 ├── screen status|on|off|unlock|rotation
@@ -157,7 +157,7 @@ adb-claw
 
 ```bash
 # JPEG frame (always start here)
-adb-claw observe --width 720 --quality 60
+adb-claw observe --quality 60
 
 # Model path: always use the 0-999 grid.
 adb-claw tap --normalized 500 500

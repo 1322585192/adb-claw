@@ -118,7 +118,7 @@ adb-claw open 'snssdk1128://search/result?keyword=遥控车&type=0'
 
 ```
 1. adb-claw open 'snssdk1128://search/result?keyword=遥控车&type=0'
-2. adb-claw observe --width 720
+2. adb-claw observe
 3. 根据 JPEG 点击分类 Tab（视频/直播/图文等），然后立即 observe
 ```
 
@@ -128,7 +128,7 @@ adb-claw open 'snssdk1128://search/result?keyword=遥控车&type=0'
 
 ```
 1. adb-claw open 'snssdk1128://search/result?keyword={关键词}&type=0'
-2. adb-claw observe --width 720
+2. adb-claw observe
 3. 手动点击"直播"Tab 切换（type=1 参数可能不生效）
 4. 纵向滚动浏览直播列表
 ```
@@ -137,9 +137,9 @@ adb-claw open 'snssdk1128://search/result?keyword=遥控车&type=0'
 
 ```
 1. adb-claw app launch com.ss.android.ugc.aweme
-2. adb-claw observe --width 720
+2. adb-claw observe
 3. adb-claw scroll up
-4. adb-claw observe --width 720
+4. adb-claw observe
 ```
 
 ### 读取当前视频信息
@@ -150,7 +150,7 @@ adb-claw open 'snssdk1128://search/result?keyword=遥控车&type=0'
 
 ```
 1. adb-claw open 'snssdk1128://live?room_id={room_id}'
-2. adb-claw observe --width 720
+2. adb-claw observe
 ```
 
 弹幕和商品信息从截图读取，不要请求文本树。

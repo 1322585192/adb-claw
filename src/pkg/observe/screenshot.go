@@ -21,8 +21,10 @@ import (
 // DefaultJPEGQuality is the default JPEG encoding quality (1-100).
 const DefaultJPEGQuality = 60
 
-// DefaultObserveWidth is the default preview width for observe/serve frames.
-const DefaultObserveWidth = 720
+// DefaultObserveWidth is 0: emit the full logical display at its native
+// aspect ratio. --width N is an optional uniform downscale cap, not a
+// fixed output size such as 720×1560.
+const DefaultObserveWidth = 0
 
 // DefaultObserveFileName is the temp file used when observe does not get --file.
 const DefaultObserveFileName = "adb-claw-observe"

@@ -98,7 +98,7 @@ adb-claw key ENTER
 
 ```bash
 adb-claw open 'xhsdiscover://search/result?keyword=保健品推荐&type=51'
-adb-claw observe --width 720
+adb-claw observe
 ```
 
 如果首帧仍是旧页面且明显处于切换中：
@@ -106,7 +106,7 @@ adb-claw observe --width 720
 ```bash
 adb-claw wait --changed --timeout 5000
 # 画面已经变化，再读取一次新 JPEG
-adb-claw observe --width 720
+adb-claw observe
 ```
 
 不要无条件执行 `wait + observe`；先看首帧再决定是否需要等变化。
@@ -115,21 +115,21 @@ adb-claw observe --width 720
 
 ```bash
 adb-claw open 'xhsdiscover://search/result?keyword=注册营养师Yuanyuan&type=51'
-adb-claw observe --width 720
+adb-claw observe
 # 看图点击「用户」Tab
 adb-claw tap --normalized X Y
-adb-claw observe --width 720
+adb-claw observe
 # 看图点击目标账号卡片
 adb-claw tap --normalized X Y
-adb-claw observe --width 720
+adb-claw observe
 ```
 
 ### 读取主页与帖子
 
 ```bash
-adb-claw observe --width 720
+adb-claw observe
 adb-claw scroll down
-adb-claw observe --width 720
+adb-claw observe
 ```
 
 每次只根据当前 JPEG 读取可见内容。若页面未变化，同一坐标最多再试一次，不循环点击。
@@ -137,21 +137,21 @@ adb-claw observe --width 720
 ### 查看橱窗商品
 
 ```bash
-adb-claw observe --width 720
+adb-claw observe
 # 看图点击橱窗入口
 adb-claw tap --normalized X Y
-adb-claw observe --width 720
+adb-claw observe
 adb-claw scroll down
-adb-claw observe --width 720
+adb-claw observe
 ```
 
 ### 查看帖子正文或评论
 
 ```bash
-adb-claw observe --width 720
+adb-claw observe
 # 看图点击目标帖子卡片
 adb-claw tap --normalized X Y
-adb-claw observe --width 720
+adb-claw observe
 ```
 
 图文帖可继续 `scroll down`；视频帖不要整页滚动，先确认评论入口或评论区域。

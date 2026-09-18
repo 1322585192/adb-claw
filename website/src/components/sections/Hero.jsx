@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useLanguage } from '../../i18n/context'
 
 const terminalLines = [
-  { cmd: 'adb-claw observe --width 720', delay: 0 },
+  { cmd: 'adb-claw observe', delay: 0 },
   { out: '{"ok":true,"command":"observe","data":{...}}', delay: 800 },
   { cmd: 'adb-claw tap --index 5', delay: 1600 },
   { out: '{"ok":true,"command":"tap","duration_ms":38}', delay: 2200 },

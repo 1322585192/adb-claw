@@ -49,9 +49,6 @@ func (s *Server) Run() error {
 	if s.Options.Quality == 0 {
 		s.Options.Quality = frame.QualityHigh
 	}
-	if s.Options.Width == 0 {
-		s.Options.Width = frame.WidthHigh
-	}
 	if s.Options.LatestPath == "" {
 		s.Options.LatestPath = frame.DefaultLatestPath()
 	}

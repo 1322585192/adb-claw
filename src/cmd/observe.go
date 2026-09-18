@@ -114,7 +114,7 @@ func init() {
 	screenshotCmd.Flags().StringVar(&screenshotCaptureMode, "capture", "auto", "Capture mode: auto | stream | pull")
 	screenshotCmd.Flags().BoolVar(&screenshotProfile, "profile", false, "Include segmented capture timing")
 
-	observeCmd.Flags().IntVar(&observeMaxWidth, "width", observe.DefaultObserveWidth, "Max screenshot width (default 720)")
+	observeCmd.Flags().IntVar(&observeMaxWidth, "width", observe.DefaultObserveWidth, "Max screenshot width (0 = native size, keep device aspect)")
 	observeCmd.Flags().StringVar(&observeFormat, "format", "jpeg", "Screenshot format: jpeg | png")
 	observeCmd.Flags().IntVar(&observeQuality, "quality", observe.DefaultJPEGQuality, "JPEG quality 1-100")
 	observeCmd.Flags().StringVar(&observeFile, "file", "", "Screenshot output path (default: $TMPDIR/adb-claw-observe.jpg)")

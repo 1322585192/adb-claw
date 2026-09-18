@@ -15,7 +15,7 @@ import java.lang.reflect.Method;
  * Persistent JPEG frame source. No accessibility node / text output.
  *
  *   adb exec-out CLASSPATH=... app_process / ADBClawBridge \
- *       --interval 250 --width 720 --quality 60
+ *       --interval 250 --width 0 --quality 60
  *
  * Binary protocol (big-endian, no JSON):
  *   magic[4]="ADBF" version u8 rotation u8 seq u32 captured_at_ms u64
@@ -28,7 +28,7 @@ import java.lang.reflect.Method;
 public class ADBClawBridge {
     private static final PrintStream err = System.err;
     private static HandlerThread handlerThread;
-    private static volatile int targetWidth = 720;
+    private static volatile int targetWidth = 0;
     private static volatile int jpegQuality = 60;
     private static volatile int intervalMs = 250;
     private static volatile boolean running = true;
@@ -161,11 +161,11 @@ public class ADBClawBridge {
                 }
             }
             int width = targetWidth;
-            if (width <= 0) {
-                width = 720;
-            }
-            if (deviceW > width) {
+            if (width > 0 && deviceW > width) {
                 int h = deviceH * width / deviceW;
+                if (h < 1) {
+                    h = 1;
+                }
                 Bitmap scaled = Bitmap.createScaledBitmap(bmp, width, h, true);
                 if (scaled != bmp) {
                     bmp.recycle();
