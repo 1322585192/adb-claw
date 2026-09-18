@@ -34,6 +34,8 @@ public class ADBClawMonitor {
         "GLSurfaceView",
     };
 
+    private static HandlerThread handlerThread;
+
     public static void main(String[] args) {
         int interval = 2000;
         int maxCount = 0; // 0 = unlimited
@@ -59,13 +61,11 @@ public class ADBClawMonitor {
 
         err.println("[ADBClawMonitor] Connected to accessibility framework");
 
-        // Wait for accessibility framework to fully initialize
-        sleep(1000);
-
         final UiAutomation uiAutoFinal = uiAutomation;
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             try {
                 disconnectUiAutomation(uiAutoFinal);
+                quitHandlerThread();
                 err.println("[ADBClawMonitor] Disconnected");
             } catch (Exception ignored) {}
         }));
@@ -74,13 +74,17 @@ public class ADBClawMonitor {
         int pollCount = 0;
 
         try {
+            waitForRoot(uiAutomation, 500);
+
             while (maxCount == 0 || pollCount < maxCount) {
                 pollCount++;
                 try {
                     AccessibilityNodeInfo root = uiAutomation.getRootInActiveWindow();
                     if (root == null) {
                         err.println("[ADBClawMonitor] Root node is null, retrying...");
-                        sleep(interval);
+                        if (maxCount == 0 || pollCount < maxCount) {
+                            sleep(interval);
+                        }
                         continue;
                     }
 
@@ -109,11 +113,28 @@ public class ADBClawMonitor {
                     err.println("[ADBClawMonitor] Error: " + e.getMessage());
                 }
 
-                sleep(interval);
+                if (maxCount == 0 || pollCount < maxCount) {
+                    sleep(interval);
+                }
             }
         } finally {
             try { disconnectUiAutomation(uiAutomation); } catch (Exception ignored) {}
+            quitHandlerThread();
             err.println("[ADBClawMonitor] Done after " + pollCount + " polls");
+        }
+    }
+
+    private static void waitForRoot(UiAutomation uiAutomation, int timeoutMs) {
+        long deadline = System.currentTimeMillis() + timeoutMs;
+        while (System.currentTimeMillis() < deadline) {
+            try {
+                AccessibilityNodeInfo root = uiAutomation.getRootInActiveWindow();
+                if (root != null) {
+                    root.recycle();
+                    return;
+                }
+            } catch (Exception ignored) {}
+            sleep(50);
         }
     }
 
@@ -125,6 +146,7 @@ public class ADBClawMonitor {
     private static UiAutomation connectUiAutomation() throws Exception {
         HandlerThread ht = new HandlerThread("UiAutoThread");
         ht.start();
+        handlerThread = ht;
 
         // android.app.UiAutomationConnection is @hide, extends IUiAutomationConnection$Stub
         Class<?> connClass = Class.forName("android.app.UiAutomationConnection");
@@ -197,6 +219,13 @@ public class ADBClawMonitor {
             m.setAccessible(true);
             m.invoke(uiAuto);
         } catch (Exception ignored) {}
+    }
+
+    private static void quitHandlerThread() {
+        if (handlerThread != null) {
+            handlerThread.quit();
+            handlerThread = null;
+        }
     }
 
     private static String jsonString(String s) {

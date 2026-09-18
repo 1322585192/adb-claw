@@ -121,7 +121,7 @@ claude --plugin-dir .  # 在项目根目录启动，加载当前目录为插件
 - **UI 树过滤** (`pkg/observe/uitree.go`) — 只索引有 text/resource-id/content-desc 或 clickable/scrollable 的节点，减少 agent 噪音。Element 带 index/bounds/center
 - **输入为顶级命令** — `adb-claw tap` 而非 `adb-claw input tap`
 - **observe 部分失败容忍** — 截屏和 UI 树并行（sync.WaitGroup），互不阻塞
-- **输入命令支持元素定位** — tap/long-press 支持 `--index`/`--id`/`--text` 直接定位 UI 元素
+- **输入命令支持元素定位** — tap/long-press 的 `--index`/`--id`/`--text` 使用最近一次 observe 快照，过期返回 `STALE_STATE`，`--refresh` 才重新 dump
 - **文本输入安全** — `type` 命令转义 shell 特殊字符，拒绝非 ASCII 字符
 
 ## 命令树
@@ -130,11 +130,11 @@ claude --plugin-dir .  # 在项目根目录启动，加载当前目录为插件
 adb-claw
 ├── device list                    # 列出已连接设备
 ├── device info                    # 设备详情（型号/版本/屏幕尺寸/密度）
-├── observe [--width px] [--format] [--quality] [--file]  # 截屏 + UI 树并行（JPEG 文件，JSON 不含图片/base64，坐标仍为设备像素）
-├── screenshot [--file path] [--width px] [--format] [--quality]  # 截屏（默认 JPEG）
-├── ui tree                        # UI 元素树（带 index）
+├── observe [--width px] [--capture auto|stream|pull] [--ui-mode] [--profile]  # 截屏 + UI 树并行，写入 state_id
+├── screenshot [--file path] [--width px] [--capture auto|stream|pull]  # 截屏（默认 JPEG）
+├── ui tree [--ui-mode] [--compressed] [--profile]  # UI 元素树（带 index/handle）
 ├── ui find --text/--id/--index    # 查找 UI 元素
-├── tap <x> <y> | --index/--id/--text     # 点击
+├── tap <x> <y> | --index/--id/--text [--refresh]  # 点击（index 使用 observe 快照）
 ├── long-press <x> <y> [--duration ms]    # 长按
 ├── swipe <x1> <y1> <x2> <y2> [--duration ms]  # 滑动
 ├── key <HOME|BACK|ENTER|...>      # 按键（30+ 别名）
@@ -145,7 +145,9 @@ adb-claw
 │   [--index N] [--pages N] [--distance px]
 ├── wait --text/--id/--activity    # 等待 UI 元素或 Activity
 │   [--gone] [--timeout ms] [--interval ms]
-├── monitor [--duration ms] [--interval ms] [--stream]  # 持续监控 UI 文本
+├── monitor [--duration ms] [--interval ms] [--stream] [--profile]  # 持续监控 UI 文本
+├── serve --stdio                  # 持久 JSONL 会话（observe/act + state_id）
+├── bench [--rounds N] [--width px] # 真机分段延迟基准
 ├── screen status                  # 屏幕状态（亮/灭/锁/旋转）
 ├── screen on/off                  # 亮屏/灭屏
 ├── screen unlock                  # 解锁（无密码）

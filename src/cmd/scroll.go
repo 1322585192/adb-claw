@@ -10,7 +10,7 @@ import (
 var (
 	scrollIndex    int
 	scrollPages    int
-	scrollDistance  int
+	scrollDistance int
 	scrollDuration int
 )
 
@@ -41,8 +41,8 @@ Examples:
 			// Scroll within a specific element — resolve once
 			el, err := resolveElementByIndex(scrollIndex)
 			if err != nil {
-				writer.Fail("scroll", "ELEMENT_NOT_FOUND", err.Error(),
-					"Use 'adb-claw ui tree' to see available elements", start)
+				writer.Fail("scroll", resolveErrorCode(err), err.Error(),
+					"Run observe first or use --refresh", start)
 				return nil
 			}
 			targetInfo = elementInfo(el)
@@ -139,6 +139,7 @@ func init() {
 	scrollCmd.Flags().IntVar(&scrollPages, "pages", 1, "Number of pages to scroll")
 	scrollCmd.Flags().IntVar(&scrollDistance, "distance", 0, "Scroll distance in pixels (0 = auto)")
 	scrollCmd.Flags().IntVar(&scrollDuration, "duration", 300, "Swipe duration in ms")
+	scrollCmd.Flags().BoolVar(&refreshElements, "refresh", false, "Re-dump the UI tree instead of using the last observe snapshot")
 
 	rootCmd.AddCommand(scrollCmd)
 }

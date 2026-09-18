@@ -19,25 +19,36 @@ var uiTreeCmd = &cobra.Command{
 		start := time.Now()
 		writer.Verbose("dumping UI tree")
 
-		tree, err := observe.DumpUITree(client)
+		tree, err := observe.DumpUITreeOpts(client, observe.DumpOptions{
+			Compressed: uiTreeCompressed,
+			Mode:       observe.UIMode(uiTreeMode),
+			Profile:    uiTreeProfile,
+			Save:       true,
+		})
 		if err != nil {
 			writer.Fail("ui tree", "UI_DUMP_FAILED", err.Error(),
 				"Try again — uiautomator dump can fail during animations", start)
 			return nil
 		}
 
-		writer.Success("ui tree", map[string]interface{}{
+		writer.SuccessCompact("ui tree", map[string]interface{}{
+			"state_id": tree.StateID,
+			"package":  tree.Package,
 			"elements": tree.Elements,
 			"count":    len(tree.Elements),
+			"profile":  tree.Profile,
 		}, start)
 		return nil
 	},
 }
 
 var (
-	uiFindText  string
-	uiFindID    string
-	uiFindIndex int
+	uiFindText       string
+	uiFindID         string
+	uiFindIndex      int
+	uiTreeCompressed bool
+	uiTreeMode       string
+	uiTreeProfile    bool
 )
 
 var uiFindCmd = &cobra.Command{
@@ -112,6 +123,9 @@ func init() {
 	uiFindCmd.Flags().StringVar(&uiFindText, "text", "", "Search by text content")
 	uiFindCmd.Flags().StringVar(&uiFindID, "id", "", "Search by resource-id")
 	uiFindCmd.Flags().IntVar(&uiFindIndex, "index", -1, "Get element by index number")
+	uiTreeCmd.Flags().BoolVar(&uiTreeCompressed, "compressed", false, "Use uiautomator dump --compressed")
+	uiTreeCmd.Flags().StringVar(&uiTreeMode, "ui-mode", "full", "UI tree profile: full | compact | interactive | realtime")
+	uiTreeCmd.Flags().BoolVar(&uiTreeProfile, "profile", false, "Include segmented dump timing")
 
 	uiCmd.AddCommand(uiTreeCmd)
 	uiCmd.AddCommand(uiFindCmd)

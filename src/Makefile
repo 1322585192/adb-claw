@@ -34,8 +34,8 @@ clean:
 dex:
 	@echo "Building monitor DEX..."
 	@mkdir -p /tmp/adbclaw-dex
-	$(JAVAC) --release 11 -classpath $(ANDROID_JAR) -d /tmp/adbclaw-dex $(DEX_SRC)
-	$(D8) --output /tmp/adbclaw-dex /tmp/adbclaw-dex/ADBClawMonitor.class
+	$(JAVAC) --release 11 -classpath $(ANDROID_JAR) -d /tmp/adbclaw-dex $(DEX_SRC) ../helper/ADBClawBridge.java
+	$(D8) --output /tmp/adbclaw-dex /tmp/adbclaw-dex/*.class
 	cp /tmp/adbclaw-dex/classes.dex $(DEX_DST)
 	@rm -rf /tmp/adbclaw-dex
 	@echo "DEX built: $(DEX_DST)"

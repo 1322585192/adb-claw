@@ -81,6 +81,20 @@ func TestFindByID(t *testing.T) {
 	}
 }
 
+func TestFindByHandle(t *testing.T) {
+	tree, _ := ParseUITree([]byte(sampleXML))
+	el, err := tree.FindByHandle("e0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if el.Text != "Settings" {
+		t.Errorf("handle e0 text = %q", el.Text)
+	}
+	if _, err := tree.FindByHandle("missing"); err == nil {
+		t.Error("expected missing handle error")
+	}
+}
+
 func TestFindByIndex(t *testing.T) {
 	tree, _ := ParseUITree([]byte(sampleXML))
 

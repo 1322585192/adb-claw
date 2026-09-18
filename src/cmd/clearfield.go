@@ -31,8 +31,8 @@ Can optionally tap an element first to focus it:
 		case cmd.Flags().Changed("index"):
 			el, err := resolveElementByIndex(clearFieldIndex)
 			if err != nil {
-				writer.Fail("clear-field", "ELEMENT_NOT_FOUND", err.Error(),
-					"Use 'adb-claw ui tree' to see available elements", start)
+				writer.Fail("clear-field", resolveErrorCode(err), err.Error(),
+					"Run observe first or use --refresh", start)
 				return nil
 			}
 			targetInfo = elementInfo(el)
@@ -45,8 +45,8 @@ Can optionally tap an element first to focus it:
 		case clearFieldID != "":
 			el, err := resolveElementByID(clearFieldID)
 			if err != nil {
-				writer.Fail("clear-field", "ELEMENT_NOT_FOUND", err.Error(),
-					"Use 'adb-claw ui tree' to see available elements", start)
+				writer.Fail("clear-field", resolveErrorCode(err), err.Error(),
+					"Run observe first or use --refresh", start)
 				return nil
 			}
 			targetInfo = elementInfo(el)
@@ -59,8 +59,8 @@ Can optionally tap an element first to focus it:
 		case clearFieldText != "":
 			el, err := resolveElementByText(clearFieldText)
 			if err != nil {
-				writer.Fail("clear-field", "ELEMENT_NOT_FOUND", err.Error(),
-					"Use 'adb-claw ui tree' to see available elements", start)
+				writer.Fail("clear-field", resolveErrorCode(err), err.Error(),
+					"Run observe first or use --refresh", start)
 				return nil
 			}
 			targetInfo = elementInfo(el)
@@ -93,6 +93,7 @@ func init() {
 	clearFieldCmd.Flags().IntVar(&clearFieldIndex, "index", -1, "Focus element by UI tree index before clearing")
 	clearFieldCmd.Flags().StringVar(&clearFieldID, "id", "", "Focus element by resource-id before clearing")
 	clearFieldCmd.Flags().StringVar(&clearFieldText, "text", "", "Focus element by text content before clearing")
+	clearFieldCmd.Flags().BoolVar(&refreshElements, "refresh", false, "Re-dump the UI tree instead of using the last observe snapshot")
 
 	rootCmd.AddCommand(clearFieldCmd)
 }
