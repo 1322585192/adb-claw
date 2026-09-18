@@ -1,12 +1,12 @@
 package frame
 
 import (
-	"crypto/sha1"
 	"encoding/binary"
-	"encoding/hex"
 	"fmt"
 	"io"
 	"time"
+
+	"github.com/llm-net/adb-claw/pkg/frameartifact"
 )
 
 const (
@@ -173,6 +173,5 @@ func ReadFrame(r io.Reader) (*Frame, error) {
 
 // HashJPEG returns an 8-byte hex fingerprint of the JPEG bytes.
 func HashJPEG(jpeg []byte) string {
-	sum := sha1.Sum(jpeg)
-	return hex.EncodeToString(sum[:8])
+	return frameartifact.Hash(jpeg)
 }

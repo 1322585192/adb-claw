@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/llm-net/adb-claw/pkg/adb"
+	"github.com/llm-net/adb-claw/pkg/frameartifact"
 )
 
 type mockCaptureCommander struct {
@@ -89,6 +90,16 @@ func TestCaptureScreenshotJPEGWritesFileNoBase64(t *testing.T) {
 	if result.Path != path {
 		t.Errorf("path = %q, want %q", result.Path, path)
 	}
+	if result.FrameToken == "" || result.Hash == "" || result.CapturedAt == "" {
+		t.Fatalf("missing frame identity metadata: %+v", result)
+	}
+	meta, err := frameartifact.Load(result.FrameToken)
+	if err != nil {
+		t.Fatalf("load frame metadata: %v", err)
+	}
+	if meta.Path != path || meta.ActionWidth != 1080 || meta.ActionHeight != 2340 {
+		t.Fatalf("frame metadata = %+v", meta)
+	}
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("read output: %v", err)
@@ -106,6 +117,19 @@ func TestCaptureScreenshotJPEGWritesFileNoBase64(t *testing.T) {
 	}
 	if cfg.Width != 1080 || cfg.Height != 2340 {
 		t.Errorf("jpeg config = %dx%d, want 1080x2340", cfg.Width, cfg.Height)
+	}
+}
+
+func TestDefaultCapturePathContainsFrameToken(t *testing.T) {
+	t.Setenv("TMPDIR", t.TempDir())
+	cmd := &mockCaptureCommander{png: solidPNG(60, 90)}
+	result, err := CaptureScreenshot(cmd, CaptureOptions{Format: "jpeg"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	token, ok := frameartifact.TokenFromPath(result.Path)
+	if !ok || token != result.FrameToken {
+		t.Fatalf("path %q token=%q extracted=%q ok=%v", result.Path, result.FrameToken, token, ok)
 	}
 }
 
@@ -155,6 +179,20 @@ func TestCaptureScreenshotWidthScaleMetadata(t *testing.T) {
 	}
 }
 
+func TestScaledDimensionsPixelBudgetIsRotationInvariant(t *testing.T) {
+	pw, ph := scaledDimensions(1264, 2780, 0, 650_000)
+	lw, lh := scaledDimensions(2780, 1264, 0, 650_000)
+	if pw != lh || ph != lw {
+		t.Fatalf("portrait=%dx%d landscape=%dx%d should be rotations", pw, ph, lw, lh)
+	}
+	if pw*ph > 650_000 || lw*lh > 650_000 {
+		t.Fatalf("pixel budget exceeded: portrait=%d landscape=%d", pw*ph, lw*lh)
+	}
+	if delta := pw*2780 - ph*1264; delta < -2780 || delta > 2780 {
+		t.Fatalf("aspect ratio drifted: %dx%d", pw, ph)
+	}
+}
+
 func TestCaptureScreenshotInvalidFormat(t *testing.T) {
 	cmd := &mockCaptureCommander{png: solidPNG(10, 10)}
 	_, err := CaptureScreenshot(cmd, CaptureOptions{Format: "gif"})
@@ -164,6 +202,7 @@ func TestCaptureScreenshotInvalidFormat(t *testing.T) {
 }
 
 func TestNormalizeDefaults(t *testing.T) {
+	t.Setenv("TMPDIR", t.TempDir())
 	opts, err := normalizeCaptureOptions(CaptureOptions{})
 	if err != nil {
 		t.Fatal(err)
@@ -174,19 +213,24 @@ func TestNormalizeDefaults(t *testing.T) {
 	if opts.Quality != DefaultJPEGQuality {
 		t.Errorf("quality = %d, want %d", opts.Quality, DefaultJPEGQuality)
 	}
-	if !strings.HasSuffix(opts.Path, "adb-claw-screenshot.jpg") {
-		t.Errorf("empty path should default to screenshot file, got %q", opts.Path)
+	if filepath.Dir(opts.Path) != frameartifact.Dir() || filepath.Ext(opts.Path) != ".jpg" {
+		t.Errorf("empty path should default to a unique frame file, got %q", opts.Path)
 	}
 }
 
 func TestDefaultObservePath(t *testing.T) {
-	p := DefaultObservePath("jpeg")
-	if !strings.HasSuffix(p, "adb-claw-observe.jpg") {
-		t.Errorf("default jpeg path = %q", p)
+	t.Setenv("TMPDIR", t.TempDir())
+	first := DefaultObservePath("jpeg")
+	second := DefaultObservePath("jpeg")
+	if first == second {
+		t.Fatalf("default observe paths must be unique: %q", first)
 	}
-	p = DefaultObservePath("png")
-	if !strings.HasSuffix(p, "adb-claw-observe.png") {
-		t.Errorf("default png path = %q", p)
+	if filepath.Dir(first) != frameartifact.Dir() || filepath.Ext(first) != ".jpg" {
+		t.Errorf("default jpeg path = %q", first)
+	}
+	pngPath := DefaultObservePath("png")
+	if filepath.Ext(pngPath) != ".png" {
+		t.Errorf("default png path = %q", pngPath)
 	}
 }
 

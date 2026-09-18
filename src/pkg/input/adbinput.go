@@ -74,7 +74,7 @@ const (
 )
 
 // TypeText inputs text into the focused field. ASCII uses Android's input
-// command. Unicode uses adb-claw's embedded app_process clipboard helper.
+// command. Unicode uses adb-claw's embedded app_process ACTION_SET_TEXT helper.
 func TypeText(cmd adb.Commander, text string) (TypeMethod, error) {
 	if HasNonASCII(text) {
 		if err := typeUnicode(cmd, text); err != nil {

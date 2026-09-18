@@ -11,7 +11,7 @@ import (
 
 // ScreenStatus holds the current screen state.
 type ScreenStatus struct {
-	Display  string `json:"display"`  // "on" or "off"
+	Display  string `json:"display"` // "on" or "off"
 	Locked   bool   `json:"locked"`
 	Rotation int    `json:"rotation"` // 0-3
 }
@@ -56,23 +56,8 @@ func GetScreenStatus(cmd adb.Commander) (*ScreenStatus, error) {
 		}
 	}
 
-	// Check rotation
-	rotResult, err := cmd.Shell("dumpsys", "window", "displays")
-	if err == nil {
-		for _, line := range strings.Split(rotResult.Stdout, "\n") {
-			line = strings.TrimSpace(line)
-			if strings.Contains(line, "mCurrentRotation") || strings.Contains(line, "cur=") {
-				// Parse rotation value (0-3)
-				for _, word := range strings.Fields(line) {
-					if strings.HasPrefix(word, "mCurrentRotation=") {
-						val := strings.TrimPrefix(word, "mCurrentRotation=")
-						if r, err := strconv.Atoi(strings.TrimRight(val, ",")); err == nil {
-							status.Rotation = r
-						}
-					}
-				}
-			}
-		}
+	if rotation, err := input.CurrentRotation(cmd); err == nil {
+		status.Rotation = rotation
 	}
 
 	return status, nil

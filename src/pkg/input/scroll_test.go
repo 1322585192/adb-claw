@@ -132,6 +132,24 @@ func TestCurrentScreenSizeRotates(t *testing.T) {
 	}
 }
 
+func TestParseRotationOEMFormats(t *testing.T) {
+	tests := []struct {
+		text string
+		want int
+	}{
+		{"mCurrentRotation=ROTATION_1", 1},
+		{"mRotation=3", 3},
+		{"SurfaceOrientation: 90", 1},
+		{"rotation=270", 3},
+	}
+	for _, test := range tests {
+		got, ok := ParseRotation(test.text)
+		if !ok || got != test.want {
+			t.Errorf("ParseRotation(%q) = %d,%v; want %d,true", test.text, got, ok, test.want)
+		}
+	}
+}
+
 type fakeSizeCmd struct {
 	size string
 	rot  string

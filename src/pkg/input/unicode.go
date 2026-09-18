@@ -17,7 +17,7 @@ var inputDEX []byte
 
 const inputDEXPath = "/data/local/tmp/adbclaw-input.dex"
 
-// EnsureUnicodeDEX pushes the built-in clipboard helper when the device copy
+// EnsureUnicodeDEX pushes the built-in ACTION_SET_TEXT helper when the device copy
 // is missing or differs. The helper runs through app_process and is not an APK.
 func EnsureUnicodeDEX(cmd adb.Commander) error {
 	if len(inputDEX) < 4 || string(inputDEX[:4]) != "dex\n" {

@@ -5,14 +5,16 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/llm-net/adb-claw/pkg/atomicfile"
 )
 
 // Buffer keeps only the newest frame (capacity 1). Incoming frames replace
 // any unread previous frame so the host never queues latency.
 type Buffer struct {
-	mu     sync.Mutex
-	cond   *sync.Cond
-	latest *Frame
+	mu       sync.Mutex
+	cond     *sync.Cond
+	latest   *Frame
 	lastHash string
 	dropped  uint64
 }
@@ -89,22 +91,7 @@ func (b *Buffer) WaitAfter(seq uint32, hash string, timeout time.Duration) *Fram
 
 // WriteAtomic writes jpeg bytes to path via a sibling temp file + rename.
 func WriteAtomic(path string, jpeg []byte) error {
-	if path == "" {
-		return nil
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil && !os.IsExist(err) {
-		// Dir may be the temp root which already exists.
-		_ = err
-	}
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, jpeg, 0644); err != nil {
-		return err
-	}
-	if err := os.Rename(tmp, path); err != nil {
-		_ = os.Remove(tmp)
-		return err
-	}
-	return nil
+	return atomicfile.Write(path, jpeg, 0644)
 }
 
 // DefaultLatestPath is the atomic latest.jpg used by serve.
