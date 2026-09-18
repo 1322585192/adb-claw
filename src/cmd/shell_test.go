@@ -16,6 +16,7 @@ func TestForbiddenShellReason(t *testing.T) {
 		{"clipboard binder", "service call clipboard 2 s16 text", true},
 		{"set ime", "ime set com.android.adbkeyboard/.AdbIME", true},
 		{"enable ime", "ime enable com.android.adbkeyboard/.AdbIME", true},
+		{"wrapped ime", "sh -c 'ime set com.android.adbkeyboard/.AdbIME'", true},
 		{"secure ime", "settings put secure default_input_method bad/.IME", true},
 		{"get property", "getprop ro.build.version.release", false},
 		{"list files", "ls /sdcard/", false},

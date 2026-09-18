@@ -76,10 +76,12 @@ func forbiddenShellReason(command string) string {
 func containsIMEChange(command string) bool {
 	fields := strings.Fields(command)
 	for i, field := range fields {
+		field = strings.Trim(field, `"'();&|`)
 		if field != "ime" || i+1 >= len(fields) {
 			continue
 		}
-		switch fields[i+1] {
+		subcommand := strings.Trim(fields[i+1], `"'();&|`)
+		switch subcommand {
 		case "set", "enable", "disable", "reset":
 			return true
 		}
