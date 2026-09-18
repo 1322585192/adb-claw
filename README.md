@@ -17,7 +17,7 @@ Android device control CLI — built for AI agents, claws, bots, and LLMs. Pure 
 ```bash
 # See the screen, then click the center of the 0-999 grid
 adb-claw observe --quality 60
-adb-claw tap --normalized 500 500
+adb-claw tap --normalized 500 500 --frame FRAME_TOKEN --wait-changed 1500
 
 # Optional: hear what the device hears
 adb-claw audio capture --stream | asrclaw transcribe --stream --lang zh
@@ -26,7 +26,7 @@ adb-claw audio capture --stream | asrclaw transcribe --stream --lang zh
 ### Core Capabilities
 
 - **Structured JSON output** — Every command returns `{ok, command, data, error, duration_ms, timestamp}` with actionable `suggestion` on errors.
-- **Normalized targeting** — Skill tools use `--normalized` so preview scale or rotation cannot shift the hit point. CLI still accepts device pixels.
+- **Frame-bound targeting** — Skill tools use `--normalized --frame FRAME_TOKEN`, so preview scale or rotation cannot shift the hit point. Raw pixels require explicit `--raw`.
 - **Built-in Unicode input** — `type "中文"` uses an embedded app_process helper; no APK or IME change.
 - **Deep link navigation** — `open` skips unnecessary UI steps when an app exposes a URI.
 - **Smart scroll** — Auto-calculates swipe coordinates from the current screen size.
@@ -42,7 +42,7 @@ v2 deletes `ui tree` / `ui find`, `--index` / `--id` / `--text` locators, `wait 
 
 | v1 | v2 |
 |----|----|
-| `observe` → tap `--index N` | `observe` → read JPEG → `tap --normalized X Y` |
+| `observe` → tap `--index N` | `observe` → read unique JPEG/token → `tap --normalized X Y --frame TOKEN` |
 | `serve` `observe` + `act(state_id)` | `serve` `frame.latest` + `act(frame_seq, x, y)` |
 | `wait --text Login` | `wait --changed` or `--activity` |
 
@@ -128,17 +128,17 @@ Both platforms use the **Triggers** list in `SKILL.md` to decide when to activat
 
 ```
 adb-claw
-├── observe [--width px] [--quality 60] [--file]   # JPEG frame, native aspect
-├── screenshot [--file path] [--width px]
-├── tap <x> <y> [--normalized]
-├── long-press <x> <y> [--duration ms] [--normalized]
-├── swipe <x1> <y1> <x2> <y2> [--normalized]
+├── observe [--width px] [--max-pixels N] [--file] # unique JPEG + frame token
+├── screenshot [--file path] [--width px] [--max-pixels N]
+├── tap <x> <y> --normalized --frame TOKEN [--wait-changed ms]
+├── long-press <x> <y> --normalized --frame TOKEN
+├── swipe <x1> <y1> <x2> <y2> --normalized --frame TOKEN
 ├── key <HOME|BACK|ENTER|...>
 ├── type <text>
 ├── clear-field
 ├── open <uri>
-├── scroll <up|down|left|right> [--pages N]
-├── wait --activity|--changed
+├── scroll <up|down|left|right> --frame TOKEN [--pages N]
+├── wait --activity NAME | --changed --after-frame TOKEN
 ├── serve --stdio [--width px]
 ├── bench [--rounds N]
 ├── audio capture [--file path] [--duration ms] [--stream]
@@ -156,11 +156,11 @@ adb-claw
 ### Observe & Interact
 
 ```bash
-# JPEG frame (always start here)
+# Unique JPEG frame + frame_token (always start here)
 adb-claw observe --quality 60
 
-# Model path: always use the 0-999 grid.
-adb-claw tap --normalized 500 500
+# Read the returned path, then use its token with the 0-999 grid.
+adb-claw tap --normalized 500 500 --frame FRAME_TOKEN --wait-changed 1500
 
 adb-claw type "hello world"
 adb-claw type "王者荣耀"
@@ -173,14 +173,14 @@ adb-claw type "new text"
 
 ```bash
 # Smart scroll (auto-calculates coordinates)
-adb-claw scroll down
-adb-claw scroll up --pages 3
+adb-claw scroll down --frame FRAME_TOKEN
+adb-claw scroll up --pages 3 --frame FRAME_TOKEN
 # Open deep links when they reduce UI steps
 adb-claw open "snssdk1128://search/result?keyword=猫咪"
 adb-claw open "https://www.google.com"
 
 # Wait for a visual change or activity instead of sleep
-adb-claw wait --changed --timeout 3000
+adb-claw wait --changed --after-frame FRAME_TOKEN --timeout 3000
 adb-claw wait --activity ".MainActivity"
 ```
 
@@ -239,7 +239,7 @@ Output format can be changed with `-o`:
 
 ```bash
 adb-claw observe -o text       # Human-readable
-adb-claw tap 100 200 -o quiet  # Errors only
+adb-claw tap --raw 100 200 -o quiet  # Human debugging; errors only
 ```
 
 ## Global Flags

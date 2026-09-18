@@ -10,6 +10,7 @@ import (
 
 var (
 	observeMaxWidth    int
+	observeMaxPixels   int
 	observeFormat      string
 	observeQuality     int
 	observeFile        string
@@ -38,12 +39,13 @@ mapped to data.screenshot.device_width / device_height.`,
 		}
 
 		result := observe.Observe(client, observe.ObserveOptions{
-			MaxWidth: observeMaxWidth,
-			Format:   format,
-			Quality:  observeQuality,
-			Path:     observeFile,
-			Mode:     observe.CaptureMode(observeCaptureMode),
-			Profile:  observeProfile,
+			MaxWidth:  observeMaxWidth,
+			MaxPixels: observeMaxPixels,
+			Format:    format,
+			Quality:   observeQuality,
+			Path:      observeFile,
+			Mode:      observe.CaptureMode(observeCaptureMode),
+			Profile:   observeProfile,
 		})
 
 		if result.Screenshot == nil {
@@ -61,6 +63,7 @@ mapped to data.screenshot.device_width / device_height.`,
 var (
 	screenshotOutput      string
 	screenshotMaxWidth    int
+	screenshotMaxPixels   int
 	screenshotFormat      string
 	screenshotQuality     int
 	screenshotCaptureMode string
@@ -88,12 +91,13 @@ var screenshotCmd = &cobra.Command{
 		}
 
 		result, err := observe.CaptureScreenshot(client, observe.CaptureOptions{
-			MaxWidth: screenshotMaxWidth,
-			Format:   format,
-			Quality:  screenshotQuality,
-			Path:     path,
-			Mode:     observe.CaptureMode(screenshotCaptureMode),
-			Profile:  screenshotProfile,
+			MaxWidth:  screenshotMaxWidth,
+			MaxPixels: screenshotMaxPixels,
+			Format:    format,
+			Quality:   screenshotQuality,
+			Path:      path,
+			Mode:      observe.CaptureMode(screenshotCaptureMode),
+			Profile:   screenshotProfile,
 		})
 		if err != nil {
 			writer.Fail("screenshot", "SCREENSHOT_FAILED", err.Error(),
@@ -107,17 +111,19 @@ var screenshotCmd = &cobra.Command{
 }
 
 func init() {
-	screenshotCmd.Flags().StringVarP(&screenshotOutput, "file", "f", "", "Screenshot output path (default: $TMPDIR/adb-claw-screenshot.jpg)")
+	screenshotCmd.Flags().StringVarP(&screenshotOutput, "file", "f", "", "Screenshot output path (default: unique temp frame path)")
 	screenshotCmd.Flags().IntVar(&screenshotMaxWidth, "width", 0, "Max image width in pixels (0 = original size)")
+	screenshotCmd.Flags().IntVar(&screenshotMaxPixels, "max-pixels", 0, "Rotation-invariant encoded pixel budget (0 = native)")
 	screenshotCmd.Flags().StringVar(&screenshotFormat, "format", "jpeg", "Image format: jpeg | png")
 	screenshotCmd.Flags().IntVar(&screenshotQuality, "quality", observe.DefaultJPEGQuality, "JPEG quality 1-100")
 	screenshotCmd.Flags().StringVar(&screenshotCaptureMode, "capture", "auto", "Capture mode: auto | stream | pull")
 	screenshotCmd.Flags().BoolVar(&screenshotProfile, "profile", false, "Include segmented capture timing")
 
 	observeCmd.Flags().IntVar(&observeMaxWidth, "width", observe.DefaultObserveWidth, "Max screenshot width (0 = native size, keep device aspect)")
+	observeCmd.Flags().IntVar(&observeMaxPixels, "max-pixels", 0, "Rotation-invariant encoded pixel budget (0 = native)")
 	observeCmd.Flags().StringVar(&observeFormat, "format", "jpeg", "Screenshot format: jpeg | png")
 	observeCmd.Flags().IntVar(&observeQuality, "quality", observe.DefaultJPEGQuality, "JPEG quality 1-100")
-	observeCmd.Flags().StringVar(&observeFile, "file", "", "Screenshot output path (default: $TMPDIR/adb-claw-observe.jpg)")
+	observeCmd.Flags().StringVar(&observeFile, "file", "", "Screenshot output path (default: unique temp frame path)")
 	observeCmd.Flags().StringVar(&observeCaptureMode, "capture", "auto", "Capture mode: auto | stream | pull")
 	observeCmd.Flags().BoolVar(&observeProfile, "profile", false, "Include segmented observe timing")
 

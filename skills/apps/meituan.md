@@ -206,7 +206,7 @@ adb-claw open 'imeituan://www.meituan.com/search?q=火锅'
 
 # 方式 2: 手动搜索（内置 Unicode 输入）
 adb-claw observe
-adb-claw tap --normalized X Y
+adb-claw tap --normalized X Y --frame FRAME_TOKEN
 adb-claw clear-field
 adb-claw type "火锅"
 adb-claw key ENTER
@@ -224,9 +224,10 @@ adb-claw open 'imeituan://www.meituan.com/search?q=肯德基'
 # 方式 2: 进入外卖频道浏览附近餐厅
 adb-claw open 'imeituan://www.meituan.com/waimai'
 # 外卖首页分类图标下方是餐厅列表，需先滚动
-adb-claw scroll down           # 滚一页后餐厅卡片进入视野
-adb-claw observe   # 截屏确认当前视野和餐厅名
-adb-claw tap --normalized 500 400
+adb-claw observe               # 读取唯一 path 和 frame_token
+adb-claw scroll down --frame FRAME_TOKEN --wait-changed 1500
+# 读取滚动返回的新 JPEG，确认餐厅名
+adb-claw tap --normalized 500 400 --frame NEW_FRAME_TOKEN --wait-changed 1500
 
 # 方式 3: 按分类浏览
 # 外卖首页的分类宫格（甜品饮品/小吃/汉堡披萨/火锅 等）
@@ -243,20 +244,19 @@ adb-claw tap --normalized 500 400
 # 2. 浏览菜单
 #    左侧分类栏 + 右侧菜品列表（WebView）
 #    向下滚动查看更多菜品
-adb-claw scroll down
+adb-claw scroll down --frame FRAME_TOKEN --wait-changed 1500
 
 # 3. 加购菜品
 # 商家页是 WebView / RN，按当前 JPEG 使用归一化坐标
 # 方式 A: 点击菜品进入商品详情页（WMMPActivity）
-adb-claw tap --normalized X Y      # 点菜品图片/名称区域
-adb-claw observe       # 确认进入商品详情
+adb-claw tap --normalized X Y --frame FRAME_TOKEN --wait-changed 1500
+# 读取动作返回的新 JPEG，确认进入商品详情
 # 在详情页点击"加入购物车"（价格条右侧）
-adb-claw tap --normalized X Y
-adb-claw observe
+adb-claw tap --normalized X Y --frame NEW_FRAME_TOKEN --wait-changed 1500
 adb-claw key BACK                 # 返回菜单继续选
 
 # 方式 B: 直接点菜品右侧的"+"按钮
-adb-claw tap --normalized X Y
+adb-claw tap --normalized X Y --frame FRAME_TOKEN --wait-changed 1500
 
 # 4. 检查购物车
 #    底部栏显示：总价 + 配送费 + 起送差额
@@ -289,7 +289,7 @@ adb-claw open 'imeituan://www.meituan.com/waimai'
 ```bash
 # 策略 1: 看截图找关闭/"残忍离开"/"取消"/"以后再说"，用 --normalized 点
 adb-claw observe
-adb-claw tap --normalized 500 700
+adb-claw tap --normalized 500 700 --frame FRAME_TOKEN --wait-changed 1500
 
 # 策略 2: 按返回键
 adb-claw key BACK

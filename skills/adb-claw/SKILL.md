@@ -76,27 +76,26 @@ Do **not** pause, delay, or sleep between adb-claw commands. This includes:
 
 After `tap` / `swipe` / `scroll` / `open` / `key`, issue the next command immediately:
 
-- need a new picture → `observe` or `frame.latest` right away
-- need the pixels to change first → `wait --changed` or `frame.wait_after` (returns as soon as the hash changes; do not add a sleep before or after)
+- need a changed picture → add `--wait-changed 1500` to the frame-bound action and read its returned `screenshot.path`
+- action already ran without waiting → `wait --changed --after-frame FRAME_TOKEN` and read its returned `screenshot.path`
 - need a specific activity → `wait --activity NAME`
 
 `long-press --duration` is the press gesture, not a pause between commands. Do not invent extra waits “to be safe”.
 
 ```bash
 # WRONG — never do this
-adb-claw tap --normalized 500 500
+adb-claw tap --normalized 500 500 --frame FRAME_TOKEN
 sleep 2
 adb-claw observe
 
-# RIGHT — act, then see or wait for a change
-adb-claw tap --normalized 500 500
-adb-claw observe
+# RIGHT — act and return the first changed frame
+adb-claw tap --normalized 500 500 --frame FRAME_TOKEN --wait-changed 1500
 ```
 
 ## Why ADB Claw
 
 - **Image-only observe** — `observe` / `frame.latest` writes a JPEG. JSON never includes image bytes or base64.
-- **Normalized actions** — Model tools use a 1000×1000 (0–999) grid. adb-claw maps onto the live `device_width` × `device_height`.
+- **Frame-bound normalized actions** — Model tools use a 1000×1000 (0–999) grid plus the latest `frame_token`. adb-claw maps onto that JPEG's action space and rejects a token from the wrong rotation.
 - **Persistent frame source** — `serve` keeps a latest-frame buffer at the device's native aspect (optional uniform downscale if frames are stale) so Flash does not relaunch ADB per click.
 - **Built-in Unicode input** — focus a field, then `adb-claw type "中文"`; no APK or IME change
 - **Deep links reduce steps** — prefer `adb-claw open 'app://search?keyword=中文'` when a profile provides one
@@ -172,17 +171,15 @@ Read `RUNTIME.md` for the live loop. Default model settings for the external ada
 - `media_resolution=medium` (single-turn `high` only for dense small text)
 
 ```bash
-# 1. See the screen (JPEG file, native aspect / quality 60)
+# 1. See the screen (unique JPEG path, native aspect / quality 60)
 adb-claw observe --quality 60
 
-# 2. Act on the 0-999 grid (center of the screen)
-adb-claw tap --normalized 500 500
-
-# 3. Next command immediately — no sleep in between
-adb-claw observe --quality 60
+# 2. Read path and frame_token, then act on the 0-999 grid.
+# If pixels should change, this command returns the next unique JPEG directly.
+adb-claw tap --normalized 500 500 --frame FRAME_TOKEN --wait-changed 1500
 ```
 
-`observe` writes a JPEG to `data.screenshot.path`. **Read that file.** Do not paste the JSON into notes.
+`observe` writes each JPEG to a unique `data.screenshot.path` and returns `frame_token`. **Read that file and use that token for the next coordinate action.** Never reuse a hardcoded temp path.
 
 **Never tap JPEG pixel coordinates.** Always use `--normalized` (or serve `act` with 0–999) so preview scale or rotation cannot shift the hit point.
 
@@ -191,7 +188,7 @@ For CJK apps, prefer deep links; if none exists, focus the field and use built-i
 ```bash
 adb-claw open 'snssdk1128://search/result?keyword=猫咪'
 # or:
-adb-claw tap --normalized X Y
+adb-claw tap --normalized X Y --frame FRAME_TOKEN
 adb-claw type "猫咪"
 ```
 
@@ -220,13 +217,14 @@ App Profiles are knowledge bases — deep links, visual landmarks, device-specif
 ### observe — Screenshot Frame
 
 ```bash
-adb-claw observe                         # native-aspect JPEG + size metadata
+adb-claw observe                         # unique native-aspect JPEG + token/hash
 adb-claw observe --width 540 --quality 60  # optional uniform downscale
-adb-claw observe --capture pull          # Faster on TCP/SSH ADB
+adb-claw observe --max-pixels 650000     # rotation-invariant pixel budget
+adb-claw observe --capture pull          # explicit compatibility/diagnostic mode
 adb-claw observe --profile
 ```
 
-Returns `screenshot.path` plus `device_width` / `device_height` / `image_width` / `image_height` / `scale`. No UI elements.
+Returns a unique `screenshot.path`, `frame_token`, `hash`, `captured_at`, `rotation`, `action_width` / `action_height`, image size, and scale. No UI elements.
 
 ### screenshot — Capture Screen
 
@@ -238,21 +236,21 @@ adb-claw screenshot --width 540
 
 ### tap / long-press / swipe — Coordinates
 
-CLI keeps raw device pixels and adds `--normalized` for the model grid.
+Model actions require `--normalized` and the latest frame token.
 
 ```bash
-adb-claw tap --normalized 500 500
-adb-claw long-press --normalized 500 500 --duration 2000
-adb-claw swipe --normalized 500 800 500 200
+adb-claw tap --normalized 500 500 --frame FRAME_TOKEN --wait-changed 1500
+adb-claw long-press --normalized 500 500 --frame FRAME_TOKEN --duration 2000
+adb-claw swipe --normalized 500 800 500 200 --frame FRAME_TOKEN --wait-changed 1500
 ```
 
-Agents always use `--normalized`. Raw device pixels are for explicit human debugging only and must never be inferred from a resized JPEG.
+Agents always use `--normalized --frame FRAME_TOKEN`. Bare coordinates are rejected. `--raw` is an explicit human debugging escape and must never be used by an agent.
 
 ### type / key / clear-field
 
 ```bash
 adb-claw type "Hello world"
-adb-claw type "王者荣耀"         # built-in Unicode clipboard/paste helper
+adb-claw type "王者荣耀"         # built-in Unicode ACTION_SET_TEXT helper
 adb-claw key HOME
 adb-claw key BACK
 adb-claw clear-field            # focused field only
@@ -264,8 +262,8 @@ adb-claw clear-field            # focused field only
 
 ```bash
 adb-claw open https://www.google.com
-adb-claw wait --changed --timeout 3000    # returns early; do not sleep first
-adb-claw scroll down --pages 2
+adb-claw wait --changed --after-frame FRAME_TOKEN --timeout 3000
+adb-claw scroll down --pages 2 --frame FRAME_TOKEN --wait-changed 1500
 adb-claw wait --activity .MainActivity
 ```
 
@@ -315,9 +313,10 @@ adb-claw doctor
 
 | What just happened | Next command |
 |--------------------|--------------|
-| `tap` / `scroll` / `key` / `type` | `observe` immediately |
+| Frame-bound `tap` / `scroll` with `--wait-changed` | Read the returned `screenshot.path` and use its new token |
+| `key` / `type` | `observe` immediately and use the new token |
 | `open` / `app launch` | `observe` immediately; only wait if that frame is visibly old/loading and cannot be acted on |
-| One-shot frame is visibly transitional | `wait --changed`, then one `observe` |
+| Action ran without integrated wait | `wait --changed --after-frame FRAME_TOKEN`; read its returned path directly |
 | Serve `act` needs a changed image | `frame.wait_after`; read the returned `path` directly |
 | `frame.wait_after` returned | Read its JPEG; never call `frame.latest` just to duplicate it |
 
@@ -328,7 +327,7 @@ If the next step is already `observe` / `frame.latest`, skip `wait` — do not s
 ### Stop and retry policy
 
 - An empty result, error page, placeholder, or unchanged screen is an observed state, not proof that the tap failed.
-- If the intended target is still visible after an action, adjust once using the latest JPEG. Do not tap the same normalized point more than twice on the same screen.
+- If the intended target is still visible after an action, adjust once using the latest JPEG and its new token. Do not tap the same `hash + normalized point` more than twice.
 - Never switch to raw pixels, XML, `uiautomator`, `dumpsys`, clipboard service calls, a downloaded APK, or an IME change. Report the visible state or ask the user when the image-only path cannot proceed.
 - Use only adb-claw commands for device work. Do not invoke `curl`, `find`, Python, or another host tool to invent a control workaround.
 

@@ -21,7 +21,7 @@ adb-claw app launch com.xingin.xhs
 若深度链接失效，可聚焦搜索框后使用内置 Unicode 输入：
 
 ```bash
-adb-claw tap --normalized X Y
+adb-claw tap --normalized X Y --frame FRAME_TOKEN
 adb-claw clear-field
 adb-claw type "保健品推荐"
 adb-claw key ENTER
@@ -104,9 +104,8 @@ adb-claw observe
 如果首帧仍是旧页面且明显处于切换中：
 
 ```bash
-adb-claw wait --changed --timeout 5000
-# 画面已经变化，再读取一次新 JPEG
-adb-claw observe
+adb-claw wait --changed --after-frame FRAME_TOKEN --timeout 5000
+# 直接读取 wait 返回的唯一 JPEG path 和新 token
 ```
 
 不要无条件执行 `wait + observe`；先看首帧再决定是否需要等变化。
@@ -117,19 +116,17 @@ adb-claw observe
 adb-claw open 'xhsdiscover://search/result?keyword=注册营养师Yuanyuan&type=51'
 adb-claw observe
 # 看图点击「用户」Tab
-adb-claw tap --normalized X Y
-adb-claw observe
+adb-claw tap --normalized X Y --frame FRAME_TOKEN --wait-changed 1500
+# 读取动作返回的新 path/token
 # 看图点击目标账号卡片
-adb-claw tap --normalized X Y
-adb-claw observe
+adb-claw tap --normalized X Y --frame NEW_FRAME_TOKEN --wait-changed 1500
 ```
 
 ### 读取主页与帖子
 
 ```bash
 adb-claw observe
-adb-claw scroll down
-adb-claw observe
+adb-claw scroll down --frame FRAME_TOKEN --wait-changed 1500
 ```
 
 每次只根据当前 JPEG 读取可见内容。若页面未变化，同一坐标最多再试一次，不循环点击。
@@ -139,10 +136,8 @@ adb-claw observe
 ```bash
 adb-claw observe
 # 看图点击橱窗入口
-adb-claw tap --normalized X Y
-adb-claw observe
-adb-claw scroll down
-adb-claw observe
+adb-claw tap --normalized X Y --frame FRAME_TOKEN --wait-changed 1500
+adb-claw scroll down --frame NEW_FRAME_TOKEN --wait-changed 1500
 ```
 
 ### 查看帖子正文或评论
@@ -150,8 +145,7 @@ adb-claw observe
 ```bash
 adb-claw observe
 # 看图点击目标帖子卡片
-adb-claw tap --normalized X Y
-adb-claw observe
+adb-claw tap --normalized X Y --frame FRAME_TOKEN --wait-changed 1500
 ```
 
 图文帖可继续 `scroll down`；视频帖不要整页滚动，先确认评论入口或评论区域。
@@ -160,7 +154,7 @@ adb-claw observe
 
 ### 深度链接后首帧还是旧页面
 
-页面切换和渲染可能晚于命令返回。先立即 `observe`；只有看到旧页或加载态且无法继续决策时，再 `wait --changed` 后 `observe`。禁止固定 sleep。
+页面切换和渲染可能晚于命令返回。先立即 `observe`；只有看到旧页或加载态且无法继续决策时，再执行 `wait --changed --after-frame FRAME_TOKEN` 并直接读取其返回路径。禁止固定 sleep。
 
 ### 「全部」Tab 与清空按钮容易误触
 
