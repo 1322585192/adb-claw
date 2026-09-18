@@ -3,7 +3,7 @@
   "version": "2.0.0",
   "description": "Android device control CLI for Gemini 3.8 Flash Computer Use. Perception is a JPEG frame only. Actions use a 0-999 normalized coordinate grid.",
   "capabilities": {
-    "input_methods": ["adb_input", "unicode_clipboard"],
+    "input_methods": ["adb_input", "unicode_set_text"],
     "stealth_levels": ["off"],
     "humanize": false,
     "unicode_input": true,
