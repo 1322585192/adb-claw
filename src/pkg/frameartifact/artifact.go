@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/llm-net/adb-claw/pkg/apptmp"
 	"github.com/llm-net/adb-claw/pkg/atomicfile"
 )
 
@@ -46,7 +47,7 @@ type Metadata struct {
 
 // Dir is the private temporary directory for one-shot frames and metadata.
 func Dir() string {
-	return filepath.Join(os.TempDir(), "adb-claw", "frames")
+	return filepath.Join(apptmp.Root(), "adb-claw", "frames")
 }
 
 // NewToken returns an opaque, filename-safe frame identifier.

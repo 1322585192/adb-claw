@@ -5,7 +5,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"syscall"
 
 	"github.com/llm-net/adb-claw/pkg/atomicfile"
 )
@@ -34,18 +33,6 @@ func ReadPID(key string) (int, error) {
 // RemovePID deletes the pid file.
 func RemovePID(key string) {
 	_ = os.Remove(PIDPath(key))
-}
-
-// PIDAlive reports whether pid is still a running process.
-func PIDAlive(pid int) bool {
-	if pid <= 0 {
-		return false
-	}
-	process, err := os.FindProcess(pid)
-	if err != nil {
-		return false
-	}
-	return process.Signal(syscall.Signal(0)) == nil
 }
 
 // Running reports whether this device's pump pid is alive.

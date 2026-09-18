@@ -5,7 +5,6 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
-	"syscall"
 	"time"
 
 	"github.com/llm-net/adb-claw/pkg/adb"
@@ -111,16 +110,8 @@ func stopLocked(key string) error {
 		}
 		return err
 	}
-	process, err := os.FindProcess(pid)
-	if err == nil && stream.PIDAlive(pid) {
-		_ = process.Signal(syscall.SIGTERM)
-		deadline := time.Now().Add(1500 * time.Millisecond)
-		for time.Now().Before(deadline) && stream.PIDAlive(pid) {
-			time.Sleep(30 * time.Millisecond)
-		}
-		if stream.PIDAlive(pid) {
-			_ = process.Signal(syscall.SIGKILL)
-		}
+	if stream.PIDAlive(pid) {
+		terminateProcess(pid)
 	}
 	stream.RemovePID(key)
 	return nil

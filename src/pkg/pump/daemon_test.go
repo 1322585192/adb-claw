@@ -3,6 +3,7 @@ package pump
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -11,9 +12,17 @@ import (
 )
 
 func TestEnsureStartsDetachedHelper(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("detached .cmd helper pid is not stable on Windows")
+	}
 	t.Setenv("TMPDIR", t.TempDir())
-	script := filepath.Join(t.TempDir(), "fake-adb-claw")
+	name := "fake-adb-claw"
 	body := "#!/bin/sh\nexec sleep 30\n"
+	if runtime.GOOS == "windows" {
+		name = "fake-adb-claw.cmd"
+		body = "@echo off\r\nping -n 31 127.0.0.1 >nul\r\n"
+	}
+	script := filepath.Join(t.TempDir(), name)
 	if err := os.WriteFile(script, []byte(body), 0755); err != nil {
 		t.Fatal(err)
 	}

@@ -1,11 +1,11 @@
 package stream
 
 import (
-	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/llm-net/adb-claw/pkg/adb"
+	"github.com/llm-net/adb-claw/pkg/apptmp"
 )
 
 const (
@@ -17,7 +17,7 @@ const (
 
 // Dir is the per-device livestream directory under $TMPDIR.
 func Dir(key string) string {
-	return filepath.Join(os.TempDir(), "adb-claw", "stream", Sanitize(key))
+	return filepath.Join(apptmp.Root(), "adb-claw", "stream", Sanitize(key))
 }
 
 // JPEGPath is the capacity-1 latest JPEG written by the pump.

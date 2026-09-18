@@ -196,7 +196,7 @@ func (s *Source) startDEX(ctx context.Context) error {
 			_ = cmd.Process.Kill()
 			return err
 		}
-	case <-time.After(4 * time.Second):
+	case <-time.After(1500 * time.Millisecond):
 		_ = cmd.Process.Kill()
 		return fmt.Errorf("frame dex start timeout")
 	}

@@ -54,11 +54,15 @@ func observeFromStream(cmd adb.Commander, opts ObserveOptions) (*ScreenshotResul
 		return snap, nil
 	}
 	if EnsureStream != nil {
+		started := time.Now()
 		if err := EnsureStream(cmd, opts); err != nil {
 			return nil, err
 		}
 		latest, err := stream.Wait(key, streamFirstWait, func(latest *stream.Latest) bool {
-			return latest != nil && latest.Hash != ""
+			if latest == nil || latest.Hash == "" {
+				return false
+			}
+			return !latest.UpdatedAt.Before(started)
 		})
 		if err != nil {
 			return nil, err
