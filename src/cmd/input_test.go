@@ -1,9 +1,11 @@
 package cmd
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
+	"github.com/llm-net/adb-claw/pkg/adb"
 	"github.com/llm-net/adb-claw/pkg/frameartifact"
 )
 
@@ -60,5 +62,28 @@ func TestParsePointRawMustBeExplicit(t *testing.T) {
 	x, y, meta, err := parsePoint("10", "20", false, true, "")
 	if err != nil || x != 10 || y != 20 || meta != nil {
 		t.Fatalf("raw point = (%d,%d,%v,%v)", x, y, meta, err)
+	}
+}
+
+type rotationCommander struct{ output string }
+
+func (c *rotationCommander) Shell(args ...string) (*adb.Result, error) {
+	return &adb.Result{Stdout: c.output}, nil
+}
+func (c *rotationCommander) ExecOut(args ...string) ([]byte, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+func (c *rotationCommander) RawCommand(args ...string) (*adb.Result, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
+func TestValidateFrameRotationRejectsOldToken(t *testing.T) {
+	meta := &frameartifact.Metadata{Rotation: 1, RotationKnown: true}
+	if err := validateFrameRotation(&rotationCommander{output: "mCurrentRotation=1"}, meta); err != nil {
+		t.Fatalf("matching rotation: %v", err)
+	}
+	err := validateFrameRotation(&rotationCommander{output: "mCurrentRotation=0"}, meta)
+	if _, ok := err.(staleFrameError); !ok {
+		t.Fatalf("rotation change error = %T %v, want staleFrameError", err, err)
 	}
 }

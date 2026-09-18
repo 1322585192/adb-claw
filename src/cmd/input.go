@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/llm-net/adb-claw/pkg/adb"
 	"github.com/llm-net/adb-claw/pkg/coord"
 	"github.com/llm-net/adb-claw/pkg/frameartifact"
 	"github.com/llm-net/adb-claw/pkg/input"
@@ -207,16 +208,24 @@ func loadActionFrame(token string) (*frameartifact.Metadata, error) {
 	if err != nil {
 		return nil, staleFrameError{err.Error()}
 	}
-	if meta.RotationKnown {
-		rotation, err := input.CurrentRotation(client)
-		if err != nil {
-			return nil, staleFrameError{"cannot verify current rotation; observe again"}
-		}
-		if rotation != meta.Rotation {
-			return nil, staleFrameError{"screen rotated since this frame; observe again"}
-		}
+	if err := validateFrameRotation(client, meta); err != nil {
+		return nil, err
 	}
 	return meta, nil
+}
+
+func validateFrameRotation(cmd adb.Commander, meta *frameartifact.Metadata) error {
+	if meta == nil || !meta.RotationKnown {
+		return nil
+	}
+	rotation, err := input.CurrentRotation(cmd)
+	if err != nil {
+		return staleFrameError{"cannot verify current rotation; observe again"}
+	}
+	if rotation != meta.Rotation {
+		return staleFrameError{"screen rotated since this frame; observe again"}
+	}
+	return nil
 }
 
 func mapPoint(xs, ys string, normalized bool, meta *frameartifact.Metadata) (int, int, error) {
