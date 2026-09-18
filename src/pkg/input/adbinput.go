@@ -65,23 +65,32 @@ func KeyEvent(cmd adb.Commander, key string) error {
 	return nil
 }
 
-// TypeText inputs text via "adb shell input text".
-// Special characters are escaped for shell safety.
-// Returns an error if the text contains non-ASCII characters (CJK, emoji, etc.)
-// because "adb shell input text" does not support them.
-func TypeText(cmd adb.Commander, text string) error {
+// TypeMethod identifies the transport used to enter text.
+type TypeMethod string
+
+const (
+	TypeMethodADBInput         TypeMethod = "adb_input"
+	TypeMethodUnicodeClipboard TypeMethod = "unicode_clipboard"
+)
+
+// TypeText inputs text into the focused field. ASCII uses Android's input
+// command. Unicode uses adb-claw's embedded app_process clipboard helper.
+func TypeText(cmd adb.Commander, text string) (TypeMethod, error) {
 	if HasNonASCII(text) {
-		return fmt.Errorf("text contains non-ASCII characters (CJK/emoji/etc.) which are not supported by 'adb shell input text'; consider using clipboard-based input instead")
+		if err := typeUnicode(cmd, text); err != nil {
+			return "", fmt.Errorf("Unicode input failed: %w; keep the field focused and retry once—do not install an IME or change device input settings", err)
+		}
+		return TypeMethodUnicodeClipboard, nil
 	}
 	escaped := escapeForInput(text)
 	result, err := cmd.Shell("input", "text", escaped)
 	if err != nil {
-		return fmt.Errorf("type text failed: %w", err)
+		return "", fmt.Errorf("type text failed: %w", err)
 	}
 	if result.ExitCode != 0 {
-		return fmt.Errorf("type text failed: %s", strings.TrimSpace(result.Stderr+result.Stdout))
+		return "", fmt.Errorf("type text failed: %s", strings.TrimSpace(result.Stderr+result.Stdout))
 	}
-	return nil
+	return TypeMethodADBInput, nil
 }
 
 // HasNonASCII returns true if the string contains any non-ASCII character.

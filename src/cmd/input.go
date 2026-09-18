@@ -142,15 +142,16 @@ var typeCmd = &cobra.Command{
 		start := time.Now()
 		text := args[0]
 		writer.Verbose("typing text: %q", text)
-		if err := input.TypeText(client, text); err != nil {
+		method, err := input.TypeText(client, text)
+		if err != nil {
 			writer.Fail("type", "TYPE_FAILED", err.Error(),
-				"Ensure an input field is focused first", start)
+				"Keep the input field focused and retry once; adb-claw handles Unicode without installing an IME", start)
 			return nil
 		}
 		writer.Success("type", map[string]interface{}{
 			"text":   text,
 			"length": len(text),
-			"method": "adb_input",
+			"method": method,
 		}, start)
 		return nil
 	},

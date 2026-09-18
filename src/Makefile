@@ -9,11 +9,13 @@ DEX_SRC := ../helper/ADBClawBridge.java
 DEX_DST := pkg/frame/classes.dex
 AUDIO_DEX_SRC := ../helper/ADBClawAudio.java
 AUDIO_DEX_DST := pkg/audio/classes.dex
+INPUT_DEX_SRC := ../helper/ADBClawInput.java
+INPUT_DEX_DST := pkg/input/classes.dex
 JAVAC := javac
 ANDROID_JAR ?= $(ANDROID_HOME)/platforms/android-33/android.jar
 D8 := d8
 
-.PHONY: build test lint clean tidy dex audio-dex
+.PHONY: build test lint clean tidy dex audio-dex input-dex
 
 build: tidy
 	@mkdir -p $(BUILD_DIR)
@@ -48,3 +50,12 @@ audio-dex:
 	cp /tmp/adbclaw-audio-dex/classes.dex $(AUDIO_DEX_DST)
 	@rm -rf /tmp/adbclaw-audio-dex
 	@echo "Audio DEX built: $(AUDIO_DEX_DST)"
+
+input-dex:
+	@echo "Building Unicode input DEX..."
+	@mkdir -p /tmp/adbclaw-input-dex
+	$(JAVAC) --release 11 -classpath $(ANDROID_JAR) -d /tmp/adbclaw-input-dex $(INPUT_DEX_SRC)
+	$(D8) --output /tmp/adbclaw-input-dex /tmp/adbclaw-input-dex/ADBClawInput.class
+	cp /tmp/adbclaw-input-dex/classes.dex $(INPUT_DEX_DST)
+	@rm -rf /tmp/adbclaw-input-dex
+	@echo "Input DEX built: $(INPUT_DEX_DST)"

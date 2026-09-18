@@ -22,10 +22,10 @@ const DefaultMaxFrameAge = 3 * time.Second
 
 // Options configure a persistent stdio session.
 type Options struct {
-	Width    int
-	Quality  int
-	MaxAge   time.Duration
-	ForceHigh bool
+	Width      int
+	Quality    int
+	MaxAge     time.Duration
+	ForceHigh  bool
 	LatestPath string
 }
 
@@ -170,6 +170,8 @@ func (s *Server) handleWaitAfter(req Request) Response {
 	if err != nil {
 		return rpcError(req.ID, "FRAME_WRITE_FAILED", err.Error())
 	}
+	info["changed"] = hash == "" || f.Hash != hash
+	info["next"] = "read_path_directly"
 	return rpcResult(req.ID, info)
 }
 
@@ -196,10 +198,15 @@ func (s *Server) handleAct(req Request) Response {
 		if params.Text == "" {
 			return rpcError(req.ID, "INVALID_ARGS", "type action requires text")
 		}
-		if err := input.TypeText(s.commander(), params.Text); err != nil {
+		method, err := input.TypeText(s.commander(), params.Text)
+		if err != nil {
 			return rpcError(req.ID, "TYPE_FAILED", err.Error())
 		}
-		return rpcResult(req.ID, map[string]interface{}{"action": "type", "text": params.Text})
+		return rpcResult(req.ID, map[string]interface{}{
+			"action": "type",
+			"text":   params.Text,
+			"method": method,
+		})
 	}
 
 	meta, err := s.session.Resolve(params.FrameSeq, s.Options.MaxAge)
