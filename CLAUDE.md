@@ -19,7 +19,8 @@ adb-claw 同时作为两个平台的 Skill 发布，**共用一份 `skills/adb-c
 └── marketplace.json         # 市场发布配置
 helper/                      # 设备端 Java 辅助程序源码
 ├── ADBClawBridge.java       # 持久 JPEG Frame DEX
-└── ADBClawAudio.java        # 系统音频采集 DEX
+├── ADBClawAudio.java        # 系统音频采集 DEX
+└── ADBClawInput.java        # Unicode 剪贴板输入 DEX（不安装 APK/IME）
 skills/
 ├── adb-claw/SKILL.md        # Skill 定义（两个平台共用）
 ├── adb-claw/RUNTIME.md      # Flash 实时循环短规则
@@ -63,6 +64,7 @@ make test
 make lint
 make dex       # 重新编译 Frame DEX（需要 Android SDK）
 make audio-dex
+make input-dex # 重新编译 Unicode 输入 DEX
 ```
 
 Go 1.24，依赖 cobra v1.10.2 + golang.org/x/image v0.36.0。
@@ -76,7 +78,7 @@ Go 1.24，依赖 cobra v1.10.2 + golang.org/x/image v0.36.0。
 - **Frame DEX** — `UiAutomation.takeScreenshot()` + 设备端 JPEG；写阻塞时丢中间帧
 - **自适应** — 默认 720/q60，帧龄或传输 P95 超门槛降到 540/q50，会话内不自动升档
 - **回退** — DEX 不可用时回退 `screencap`，绝不回退文本树
-- **文本输入安全** — `type` 转义 shell 特殊字符，拒绝非 ASCII
+- **文本输入安全** — ASCII 走 `adb shell input text`；Unicode 由内嵌 DEX 设置剪贴板并粘贴，不安装 APK、不切换 IME
 
 ## 命令树
 
@@ -125,7 +127,7 @@ adb-claw
 
 ## 技术方案
 
-标准 `adb` 完成输入、截屏回退、App/屏幕管理。实时路径由 Frame DEX（`helper/ADBClawBridge.java`）通过 `app_process` 持续输出长度前缀 JPEG。宿主只保留最新一帧。产品目标见 `docs/product-and-research.md`。
+标准 `adb` 完成输入、截屏回退、App/屏幕管理。实时路径由 Frame DEX（`helper/ADBClawBridge.java`）通过 `app_process` 持续输出长度前缀 JPEG。Unicode 输入 DEX（`helper/ADBClawInput.java`）以 `com.android.shell` context 设置剪贴板后发送粘贴按键，不安装设备应用。宿主只保留最新一帧。产品目标见 `docs/product-and-research.md`。
 
 ## 音频采集与 ASR 协作
 
