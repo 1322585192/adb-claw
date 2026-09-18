@@ -264,6 +264,68 @@ func TestCaptureScreenshotPullWritesFileAndCleansDevice(t *testing.T) {
 	}
 }
 
+func TestCaptureCompleteAcceptsUniformScale(t *testing.T) {
+	if !captureComplete(720, 1280, 1080, 1920) {
+		t.Fatal("16:9 downscale must count as a complete frame")
+	}
+	if captureComplete(720, 1280, 1080, 2340) {
+		t.Fatal("720x1280 is a crop of 1080x2340, not a full frame")
+	}
+}
+
+func TestCaptureScreenshotRecapturesCroppedFrame(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "full.jpg")
+	cmd := &retryCaptureCommander{
+		size: "Physical size: 1080x2340\n",
+		pngs: [][]byte{solidPNG(720, 1280), solidPNG(1080, 2340)},
+	}
+	result, err := CaptureScreenshot(cmd, CaptureOptions{
+		Format: "jpeg",
+		Path:   path,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.Complete {
+		t.Fatal("expected a complete recapture")
+	}
+	if result.DeviceWidth != 1080 || result.DeviceHeight != 2340 {
+		t.Fatalf("device size = %dx%d", result.DeviceWidth, result.DeviceHeight)
+	}
+	if result.DisplayWidth != 1080 || result.DisplayHeight != 2340 {
+		t.Fatalf("display size = %dx%d", result.DisplayWidth, result.DisplayHeight)
+	}
+}
+
+type retryCaptureCommander struct {
+	size string
+	pngs [][]byte
+}
+
+func (m *retryCaptureCommander) Shell(args ...string) (*adb.Result, error) {
+	if len(args) >= 2 && args[0] == "wm" && args[1] == "size" {
+		return &adb.Result{Stdout: m.size}, nil
+	}
+	if len(args) >= 1 && args[0] == "screencap" {
+		return &adb.Result{}, nil
+	}
+	return &adb.Result{}, nil
+}
+
+func (m *retryCaptureCommander) ExecOut(args ...string) ([]byte, error) {
+	if len(m.pngs) == 0 {
+		return nil, fmt.Errorf("no more frames")
+	}
+	png := m.pngs[0]
+	m.pngs = m.pngs[1:]
+	return png, nil
+}
+
+func (m *retryCaptureCommander) RawCommand(args ...string) (*adb.Result, error) {
+	return &adb.Result{}, nil
+}
+
 func TestTakeScreenshotPNG(t *testing.T) {
 	cmd := &mockCaptureCommander{png: solidPNG(64, 32)}
 	data, err := TakeScreenshot(cmd, 0)

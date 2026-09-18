@@ -27,12 +27,9 @@ func (m *typeMock) Shell(args ...string) (*adb.Result, error) {
 		if m.fail == "helper" {
 			return &adb.Result{Stderr: "clipboard denied", ExitCode: 1}, nil
 		}
-		return &adb.Result{Stdout: "OK\n"}, nil
+		return &adb.Result{Stdout: "OK SET_TEXT\n"}, nil
 	case joined == "input keyevent KEYCODE_PASTE":
-		if m.fail == "paste" {
-			return &adb.Result{Stderr: "paste failed", ExitCode: 1}, nil
-		}
-		return &adb.Result{}, nil
+		return &adb.Result{Stderr: "unexpected paste", ExitCode: 1}, nil
 	default:
 		return &adb.Result{}, nil
 	}
@@ -128,15 +125,15 @@ func TestTypeTextUnicodeUsesEmbeddedClipboardHelper(t *testing.T) {
 	if len(cmd.pushes) != 0 {
 		t.Fatalf("matching embedded DEX should not be pushed: %v", cmd.pushes)
 	}
-	if len(cmd.shells) != 3 {
+	if len(cmd.shells) != 2 {
 		t.Fatalf("shell calls = %v", cmd.shells)
 	}
 	helper := cmd.shells[1]
 	if got := helper[len(helper)-1]; got != base64.StdEncoding.EncodeToString([]byte(text)) {
 		t.Fatalf("helper payload = %q", got)
 	}
-	if got := strings.Join(cmd.shells[2], " "); got != "input keyevent KEYCODE_PASTE" {
-		t.Fatalf("paste call = %q", got)
+	if strings.Contains(fmt.Sprint(cmd.shells), "KEYCODE_PASTE") {
+		t.Fatalf("SET_TEXT must not paste into a system window: %v", cmd.shells)
 	}
 }
 

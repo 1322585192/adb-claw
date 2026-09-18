@@ -53,8 +53,9 @@ func EnsureUnicodeDEX(cmd adb.Commander) error {
 	return nil
 }
 
-// typeUnicode sets the clipboard with the built-in app_process helper and
-// pastes it into the already focused field. It never installs or changes an IME.
+// typeUnicode writes text into the focused field through the embedded
+// app_process helper. It never installs an APK, changes the IME, or pastes
+// into a system window.
 func typeUnicode(cmd adb.Commander, text string) error {
 	if err := EnsureUnicodeDEX(cmd); err != nil {
 		return err
@@ -67,26 +68,14 @@ func typeUnicode(cmd adb.Commander, text string) error {
 		"--base64", encoded,
 	)
 	if err != nil {
-		return fmt.Errorf("set Unicode clipboard: %w", err)
+		return fmt.Errorf("set Unicode text: %w", err)
 	}
 	if result.ExitCode != 0 || !strings.Contains(result.Stdout, "OK") {
 		message := strings.TrimSpace(result.Stderr + result.Stdout)
 		if message == "" {
 			message = fmt.Sprintf("helper returned exit code %d", result.ExitCode)
 		}
-		return fmt.Errorf("set Unicode clipboard: %s", message)
-	}
-
-	result, err = cmd.Shell("input", "keyevent", "KEYCODE_PASTE")
-	if err != nil {
-		return fmt.Errorf("paste Unicode text: %w", err)
-	}
-	if result.ExitCode != 0 {
-		message := strings.TrimSpace(result.Stderr + result.Stdout)
-		if message == "" {
-			message = fmt.Sprintf("input returned exit code %d", result.ExitCode)
-		}
-		return fmt.Errorf("paste Unicode text: %s", message)
+		return fmt.Errorf("set Unicode text: %s", message)
 	}
 	return nil
 }

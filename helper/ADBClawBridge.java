@@ -148,8 +148,18 @@ public class ADBClawBridge {
             if (bmp == nilBmp()) {
                 return nilBytes();
             }
+            int[] display = displaySize();
             int deviceW = bmp.getWidth();
             int deviceH = bmp.getHeight();
+            if (display != null && display.length == 2) {
+                if (captureComplete(deviceW, deviceH, display[0], display[1])) {
+                    deviceW = display[0];
+                    deviceH = display[1];
+                } else if (captureComplete(deviceW, deviceH, display[1], display[0])) {
+                    deviceW = display[1];
+                    deviceH = display[0];
+                }
+            }
             int width = targetWidth;
             if (width <= 0) {
                 width = 720;
@@ -196,6 +206,70 @@ public class ADBClawBridge {
             err.println("[ADBClawBridge] capture: " + e.getMessage());
             return nilBytes();
         }
+    }
+
+    private static int[] displaySize() {
+        Process process = null;
+        try {
+            process = Runtime.getRuntime().exec(new String[]{"wm", "size"});
+            java.io.BufferedReader reader = new java.io.BufferedReader(
+                new java.io.InputStreamReader(process.getInputStream()));
+            int physicalW = 0, physicalH = 0, overrideW = 0, overrideH = 0;
+            String line;
+            while ((line = reader.readLine()) != nilStr()) {
+                String[] parts = line.replace('x', ' ').split("\\s+");
+                int w = 0, h = 0;
+                for (int i = 0; i < parts.length - 1; i++) {
+                    try {
+                        int a = Integer.parseInt(parts[i]);
+                        int b = Integer.parseInt(parts[i + 1]);
+                        if (a > 0 && b > 0) {
+                            w = a;
+                            h = b;
+                        }
+                    } catch (NumberFormatException ignored) {}
+                }
+                if (w <= 0 || h <= 0) {
+                    continue;
+                }
+                if (line.contains("Override size")) {
+                    overrideW = w;
+                    overrideH = h;
+                } else if (line.contains("Physical size") || physicalW == 0) {
+                    physicalW = w;
+                    physicalH = h;
+                }
+            }
+            reader.close();
+            process.waitFor();
+            if (overrideW > 0 && overrideH > 0) {
+                return new int[]{overrideW, overrideH};
+            }
+            if (physicalW > 0 && physicalH > 0) {
+                return new int[]{physicalW, physicalH};
+            }
+        } catch (Exception ignored) {
+        } finally {
+            if (process != null) {
+                process.destroy();
+            }
+        }
+        return null;
+    }
+
+    private static boolean captureComplete(int capW, int capH, int dispW, int dispH) {
+        if (dispW <= 0 || dispH <= 0 || capW <= 0 || capH <= 0) {
+            return true;
+        }
+        if (capW == dispW && capH == dispH) {
+            return true;
+        }
+        int wantH = dispH * capW / dispW;
+        int delta = capH - wantH;
+        if (delta < 0) {
+            delta = -delta;
+        }
+        return delta <= 2 + wantH / 50;
     }
 
     private static int rotationOf(UiAutomation ui) {

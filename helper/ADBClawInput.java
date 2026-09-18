@@ -1,53 +1,52 @@
-import android.content.ClipData;
-import android.content.ClipboardManager;
-import android.content.Context;
+import android.app.UiAutomation;
+import android.os.Bundle;
+import android.os.HandlerThread;
 import android.os.Looper;
 import android.util.Base64;
+import android.view.accessibility.AccessibilityNodeInfo;
 
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 
 /**
  * One-shot Unicode input helper run by app_process as the shell user.
  *
- * It creates a com.android.shell Context, writes UTF-8 text to the clipboard,
- * and exits. The host follows this with KEYCODE_PASTE. No APK or IME is
- * installed on the device.
+ * It writes text into the focused editable field through UiAutomation
+ * ACTION_SET_TEXT. That keeps focus in the current app and avoids installing
+ * an APK or changing the IME.
  *
  * Usage:
  *   CLASSPATH=/data/local/tmp/adbclaw-input.dex app_process / \
  *     ADBClawInput --base64 <base64-utf8>
  */
 public final class ADBClawInput {
+    private static HandlerThread handlerThread;
+
     private ADBClawInput() {}
 
     public static void main(String[] args) {
+        UiAutomation ui = null;
         try {
-            String encoded = parseBase64(args);
             String text = new String(
-                Base64.decode(encoded, Base64.NO_WRAP),
+                Base64.decode(parseBase64(args), Base64.NO_WRAP),
                 StandardCharsets.UTF_8
             );
-
-            if (Looper.myLooper() == null) {
-                Looper.prepareMainLooper();
+            ui = connect();
+            if (!setTextOnFocused(ui, text)) {
+                throw new IllegalStateException("no focused editable field");
             }
-
-            Context systemContext = systemContext();
-            Context shellContext = systemContext.createPackageContext(
-                "com.android.shell",
-                Context.CONTEXT_IGNORE_SECURITY
-            );
-            ClipboardManager clipboard =
-                (ClipboardManager) shellContext.getSystemService(Context.CLIPBOARD_SERVICE);
-            if (clipboard == null) {
-                throw new IllegalStateException("clipboard service unavailable");
-            }
-            clipboard.setPrimaryClip(ClipData.newPlainText("", text));
-            System.out.println("OK");
+            System.out.println("OK SET_TEXT");
         } catch (Throwable t) {
             System.err.println("ADBClawInput: " + rootMessage(t));
             System.exit(1);
+        } finally {
+            if (ui != null) {
+                try { disconnect(ui); } catch (Exception ignored) {}
+            }
+            if (handlerThread != null) {
+                handlerThread.quit();
+            }
         }
     }
 
@@ -58,14 +57,64 @@ public final class ADBClawInput {
         throw new IllegalArgumentException("usage: ADBClawInput --base64 <base64-utf8>");
     }
 
-    private static Context systemContext() throws Exception {
-        Class<?> activityThread = Class.forName("android.app.ActivityThread");
-        Method systemMain = activityThread.getDeclaredMethod("systemMain");
-        systemMain.setAccessible(true);
-        Object thread = systemMain.invoke(null);
-        Method getSystemContext = activityThread.getDeclaredMethod("getSystemContext");
-        getSystemContext.setAccessible(true);
-        return (Context) getSystemContext.invoke(thread);
+    private static boolean setTextOnFocused(UiAutomation ui, String text) {
+        AccessibilityNodeInfo root = ui.getRootInActiveWindow();
+        if (root == null) {
+            return false;
+        }
+        AccessibilityNodeInfo focused = root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT);
+        if (focused == null) {
+            focused = findEditable(root);
+        }
+        if (focused == null || !focused.isEditable()) {
+            return false;
+        }
+        Bundle extras = new Bundle();
+        extras.putCharSequence(
+            AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE,
+            text
+        );
+        return focused.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, extras);
+    }
+
+    private static AccessibilityNodeInfo findEditable(AccessibilityNodeInfo node) {
+        if (node == null) {
+            return null;
+        }
+        if (node.isFocused() && node.isEditable()) {
+            return node;
+        }
+        for (int i = 0; i < node.getChildCount(); i++) {
+            AccessibilityNodeInfo child = node.getChild(i);
+            AccessibilityNodeInfo found = findEditable(child);
+            if (found != null) {
+                return found;
+            }
+        }
+        return null;
+    }
+
+    private static UiAutomation connect() throws Exception {
+        HandlerThread ht = new HandlerThread("UiInputThread");
+        ht.start();
+        handlerThread = ht;
+        Class<?> connClass = Class.forName("android.app.UiAutomationConnection");
+        Object conn = connClass.getDeclaredConstructor().newInstance();
+        Class<?> iConnClass = Class.forName("android.app.IUiAutomationConnection");
+        Constructor<UiAutomation> ctor =
+            UiAutomation.class.getDeclaredConstructor(Looper.class, iConnClass);
+        ctor.setAccessible(true);
+        UiAutomation ui = ctor.newInstance(ht.getLooper(), conn);
+        Method connectMethod = UiAutomation.class.getDeclaredMethod("connect");
+        connectMethod.setAccessible(true);
+        connectMethod.invoke(ui);
+        return ui;
+    }
+
+    private static void disconnect(UiAutomation ui) throws Exception {
+        Method m = UiAutomation.class.getDeclaredMethod("disconnect");
+        m.setAccessible(true);
+        m.invoke(ui);
     }
 
     private static String rootMessage(Throwable t) {
