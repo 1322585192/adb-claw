@@ -20,7 +20,7 @@ adb-claw 同时作为两个平台的 Skill 发布，**共用一份 `skills/adb-c
 helper/                      # 设备端 Java 辅助程序源码
 ├── ADBClawBridge.java       # 持久 JPEG Frame DEX
 ├── ADBClawAudio.java        # 系统音频采集 DEX
-└── ADBClawInput.java        # Unicode 剪贴板输入 DEX（不安装 APK/IME）
+└── ADBClawInput.java        # Unicode ACTION_SET_TEXT DEX（不安装 APK/IME）
 skills/
 ├── adb-claw/SKILL.md        # Skill 定义（两个平台共用）
 ├── adb-claw/RUNTIME.md      # Flash 实时循环短规则
@@ -73,29 +73,29 @@ Go 1.24，依赖 cobra v1.10.2 + golang.org/x/image v0.36.0。
 
 - **Commander 接口** — 所有 pkg 通过 `Commander` 调用 ADB
 - **JSON Envelope** — `{ok, command, data, error, duration_ms, timestamp}`
-- **图片-only** — observe / serve 只返回 JPEG 路径，不返回 UI 节点
-- **归一化坐标** — Skill 使用 `--normalized`；CLI 仍接受设备像素
+- **图片-only** — observe 每帧返回唯一 JPEG 路径、hash 和 token，不返回 UI 节点
+- **帧绑定坐标** — Skill 使用 `--normalized --frame TOKEN`；裸设备像素必须显式 `--raw`
 - **Frame DEX** — `UiAutomation.takeScreenshot()` + 设备端 JPEG；写阻塞时丢中间帧
 - **自适应** — 默认原分辨率/q60，帧龄或传输 P95 超门槛按原比例降到宽 540/q50，会话内不自动升档
 - **回退** — DEX 不可用时回退 `screencap`，绝不回退文本树
-- **文本输入安全** — ASCII 走 `adb shell input text`；Unicode 由内嵌 DEX 设置剪贴板并粘贴，不安装 APK、不切换 IME
+- **文本输入安全** — ASCII 走 `adb shell input text`；Unicode 由内嵌 DEX 通过 `ACTION_SET_TEXT` 写入焦点控件，不安装 APK、不切换 IME
 
 ## 命令树
 
 ```
 adb-claw
 ├── device list | info
-├── observe [--width px] [--quality 60] [--capture auto|stream|pull] [--profile]
-├── screenshot [--file path] [--width px]
-├── tap <x> <y> [--normalized]
-├── long-press <x> <y> [--duration ms] [--normalized]
-├── swipe <x1> <y1> <x2> <y2> [--duration ms] [--normalized]
+├── observe [--width px] [--max-pixels N] [--capture auto|stream|pull] [--profile]
+├── screenshot [--file path] [--width px] [--max-pixels N]
+├── tap <x> <y> --normalized --frame TOKEN [--wait-changed ms]
+├── long-press <x> <y> --normalized --frame TOKEN [--duration ms]
+├── swipe <x1> <y1> <x2> <y2> --normalized --frame TOKEN
 ├── key <HOME|BACK|ENTER|...>
 ├── type <text>
 ├── clear-field
 ├── open <uri>
-├── scroll <up|down|left|right> [--pages N] [--distance px]
-├── wait --activity|--changed [--gone] [--timeout ms]
+├── scroll <up|down|left|right> --frame TOKEN [--pages N]
+├── wait --activity NAME | --changed --after-frame TOKEN
 ├── serve --stdio [--width px]
 ├── bench [--rounds N] [--width px]
 ├── screen status|on|off|unlock|rotation
@@ -127,7 +127,7 @@ adb-claw
 
 ## 技术方案
 
-标准 `adb` 完成输入、截屏回退、App/屏幕管理。实时路径由 Frame DEX（`helper/ADBClawBridge.java`）通过 `app_process` 持续输出长度前缀 JPEG。Unicode 输入 DEX（`helper/ADBClawInput.java`）以 `com.android.shell` context 设置剪贴板后发送粘贴按键，不安装设备应用。宿主只保留最新一帧。产品目标见 `docs/product-and-research.md`。
+标准 `adb` 完成输入、截屏回退、App/屏幕管理。实时路径由 Frame DEX（`helper/ADBClawBridge.java`）通过 `app_process` 持续输出长度前缀 JPEG。Unicode 输入 DEX（`helper/ADBClawInput.java`）通过 accessibility `ACTION_SET_TEXT` 写入焦点控件，不安装设备应用。宿主只保留最新一帧。产品目标见 `docs/product-and-research.md`。
 
 ## 音频采集与 ASR 协作
 

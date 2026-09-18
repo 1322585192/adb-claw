@@ -1,23 +1,21 @@
 package cmd
 
 import (
-	"crypto/sha1"
-	"encoding/hex"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/llm-net/adb-claw/pkg/frameartifact"
 	"github.com/llm-net/adb-claw/pkg/observe"
 	"github.com/spf13/cobra"
 )
 
 var (
-	waitActivity string
-	waitChanged  bool
-	waitGone     bool
-	waitTimeout  int
-	waitInterval int
+	waitActivity   string
+	waitChanged    bool
+	waitGone       bool
+	waitTimeout    int
+	waitInterval   int
+	waitAfterFrame string
 )
 
 var waitCmd = &cobra.Command{
@@ -26,7 +24,7 @@ var waitCmd = &cobra.Command{
 	Long: `Wait for a condition on the device.
 Examples:
   adb-claw wait --activity .MainActivity
-  adb-claw wait --changed
+  adb-claw wait --changed --after-frame FRAME_TOKEN
   adb-claw wait --activity .Splash --gone`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		start := time.Now()
@@ -36,21 +34,56 @@ Examples:
 				"Example: adb-claw wait --changed", start)
 			return nil
 		}
+		if waitActivity != "" && waitChanged {
+			writer.Fail("wait", "INVALID_ARGS",
+				"Use exactly one condition: --activity or --changed",
+				"Run separate waits when both conditions matter", start)
+			return nil
+		}
+		if waitAfterFrame != "" && !waitChanged {
+			writer.Fail("wait", "INVALID_ARGS",
+				"--after-frame requires --changed", "", start)
+			return nil
+		}
+		if waitGone && waitChanged {
+			writer.Fail("wait", "INVALID_ARGS",
+				"--gone applies only to --activity", "", start)
+			return nil
+		}
 
 		timeout := time.Duration(waitTimeout) * time.Millisecond
 		interval := time.Duration(waitInterval) * time.Millisecond
-		deadline := time.Now().Add(timeout)
-		attempts := 0
-
-		var baseline string
 		if waitChanged {
-			var err error
-			baseline, err = screenHash()
+			if waitAfterFrame == "" {
+				writer.Fail("wait", "MISSING_FRAME",
+					"--changed requires --after-frame from the screen seen before the action",
+					"Run observe and pass its frame_token to --after-frame", start)
+				return nil
+			}
+			baseline, err := frameartifact.Load(waitAfterFrame)
+			if err != nil {
+				writer.Fail("wait", "STALE_FRAME", err.Error(),
+					"Run observe and pass its frame_token to --after-frame", start)
+				return nil
+			}
+			result, err := observe.WaitForChange(client, baseline, timeout, interval)
 			if err != nil {
 				writer.Fail("wait", "SCREENSHOT_FAILED", err.Error(), "", start)
 				return nil
 			}
+			writer.SuccessCompact("wait", map[string]interface{}{
+				"condition":   "changed",
+				"changed":     result.Changed,
+				"attempts":    result.Attempts,
+				"after_frame": baseline.Token,
+				"screenshot":  result.Screenshot,
+				"next":        "read_path_directly",
+			}, start)
+			return nil
 		}
+
+		deadline := time.Now().Add(timeout)
+		attempts := 0
 
 		for time.Now().Before(deadline) {
 			attempts++
@@ -72,19 +105,6 @@ Examples:
 						"condition": "activity",
 						"activity":  waitActivity,
 						"gone":      true,
-						"attempts":  attempts,
-						"next":      "observe_once",
-					}, start)
-					return nil
-				}
-			}
-			if waitChanged {
-				h, err := screenHash()
-				if err != nil {
-					writer.Verbose("hash error (attempt %d): %v", attempts, err)
-				} else if h != baseline {
-					writer.Success("wait", map[string]interface{}{
-						"condition": "changed",
 						"attempts":  attempts,
 						"next":      "observe_once",
 					}, start)
@@ -118,6 +138,7 @@ func init() {
 	waitCmd.Flags().BoolVar(&waitGone, "gone", false, "Wait for the activity to disappear")
 	waitCmd.Flags().IntVar(&waitTimeout, "timeout", 10000, "Timeout in milliseconds")
 	waitCmd.Flags().IntVar(&waitInterval, "interval", 250, "Poll interval in milliseconds")
+	waitCmd.Flags().StringVar(&waitAfterFrame, "after-frame", "", "Baseline frame token for --changed")
 	rootCmd.AddCommand(waitCmd)
 }
 
@@ -135,20 +156,4 @@ func checkActivity(activity string) (bool, string, error) {
 		}
 	}
 	return false, "", nil
-}
-
-func screenHash() (string, error) {
-	path := filepath.Join(os.TempDir(), "adb-claw-wait.jpg")
-	res, err := observe.CaptureScreenshot(client, observe.CaptureOptions{
-		MaxWidth: 360,
-		Format:   "jpeg",
-		Quality:  40,
-		Path:     path,
-		Mode:     observe.CaptureModeAuto,
-	})
-	if err != nil {
-		return "", err
-	}
-	sum := sha1.Sum(res.Bytes)
-	return hex.EncodeToString(sum[:8]), nil
 }

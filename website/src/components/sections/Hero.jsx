@@ -3,15 +3,15 @@ import { useLanguage } from '../../i18n/context'
 
 const terminalLines = [
   { cmd: 'adb-claw observe', delay: 0 },
-  { out: '{"ok":true,"command":"observe","data":{...}}', delay: 800 },
-  { cmd: 'adb-claw tap --index 5', delay: 1600 },
-  { out: '{"ok":true,"command":"tap","duration_ms":38}', delay: 2200 },
-  { cmd: 'adb-claw monitor --stream --duration 30000', delay: 3000 },
-  { out: '{"text":["Live chat msg..."],"timestamp":"..."}', delay: 3800 },
+  { out: '{"path":".../frames/abc.jpg","frame_token":"abc","rotation":1}', delay: 800 },
+  { cmd: 'adb-claw tap --normalized 500 700 --frame abc --wait-changed 1500', delay: 1600 },
+  { out: '{"changed":true,"screenshot":{"path":".../frames/def.jpg","frame_token":"def"}}', delay: 2200 },
+  { cmd: 'adb-claw scroll down --frame def --wait-changed 1500', delay: 3000 },
+  { out: '{"changed":true,"screenshot":{"frame_token":"ghi"}}', delay: 3800 },
   { cmd: 'adb-claw audio capture --stream | asrclaw transcribe', delay: 4600 },
   { out: '{"ok":true,"command":"audio_capture","streaming":true}', delay: 5400 },
-  { cmd: 'adb-claw scroll down --pages 2', delay: 6200 },
-  { out: '{"ok":true,"command":"scroll","duration_ms":680}', delay: 6800 },
+  { cmd: 'adb-claw key BACK', delay: 6200 },
+  { out: '{"ok":true,"command":"key","duration_ms":38}', delay: 6800 },
 ]
 
 function TerminalAnimation() {

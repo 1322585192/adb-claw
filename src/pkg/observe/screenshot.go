@@ -6,12 +6,15 @@ import (
 	"image"
 	"image/jpeg"
 	"image/png"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/llm-net/adb-claw/pkg/adb"
+	"github.com/llm-net/adb-claw/pkg/atomicfile"
+	"github.com/llm-net/adb-claw/pkg/frameartifact"
 	"github.com/llm-net/adb-claw/pkg/input"
 	"github.com/llm-net/adb-claw/pkg/perf"
 
@@ -26,21 +29,18 @@ const DefaultJPEGQuality = 60
 // fixed output size such as 720×1560.
 const DefaultObserveWidth = 0
 
-// DefaultObserveFileName is the temp file used when observe does not get --file.
-const DefaultObserveFileName = "adb-claw-observe"
-
-// DefaultScreenshotFileName is the temp file used when screenshot does not get --file.
-const DefaultScreenshotFileName = "adb-claw-screenshot"
-
 // CaptureOptions controls screenshot encoding and how it is returned.
-// Screenshots are always written to a file; JSON never includes image bytes or base64.
+// User-facing screenshots are written to a unique file; internal transient
+// captures may return bytes only. JSON never includes image bytes or base64.
 type CaptureOptions struct {
-	MaxWidth int         // 0 = original device resolution (preview only; tap coords stay device pixels)
-	Format   string      // "jpeg" (default) or "png"
-	Quality  int         // JPEG quality 1-100; default 70
-	Path     string      // write encoded image here; empty → DefaultScreenshotPath(format)
-	Mode     CaptureMode // stream | pull | auto
-	Profile  bool        // include segmented timing
+	MaxWidth  int         // 0 = original device resolution (preview only; tap coords stay device pixels)
+	MaxPixels int         // 0 = unlimited; rotation-invariant encoded pixel budget
+	Format    string      // "jpeg" (default) or "png"
+	Quality   int         // JPEG quality 1-100; default 70
+	Path      string      // write encoded image here; empty → DefaultScreenshotPath(format)
+	Mode      CaptureMode // stream | pull | auto
+	Profile   bool        // include segmented timing
+	Transient bool        // internal capture: return bytes without file/token persistence
 }
 
 // ScreenshotResult holds screenshot metadata. ImageWidth/Height describe the
@@ -49,11 +49,18 @@ type CaptureOptions struct {
 type ScreenshotResult struct {
 	Format        string         `json:"format"`
 	Path          string         `json:"path"`
+	FrameToken    string         `json:"frame_token"`
+	Hash          string         `json:"hash"`
+	CapturedAt    string         `json:"captured_at"`
 	Size          int            `json:"size_bytes"`
 	DeviceWidth   int            `json:"device_width"`
 	DeviceHeight  int            `json:"device_height"`
+	ActionWidth   int            `json:"action_width"`
+	ActionHeight  int            `json:"action_height"`
 	ImageWidth    int            `json:"image_width"`
 	ImageHeight   int            `json:"image_height"`
+	Rotation      int            `json:"rotation"`
+	RotationKnown bool           `json:"rotation_known"`
 	Scale         float64        `json:"scale"`
 	DisplayWidth  int            `json:"display_width,omitempty"`
 	DisplayHeight int            `json:"display_height,omitempty"`
@@ -65,29 +72,23 @@ type ScreenshotResult struct {
 
 // ObserveOptions controls a screenshot-only observe call.
 type ObserveOptions struct {
-	MaxWidth int
-	Format   string
-	Quality  int
-	Path     string
-	Mode     CaptureMode
-	Profile  bool
-}
-
-func imageExt(format string) string {
-	if strings.ToLower(format) == "png" {
-		return "png"
-	}
-	return "jpg"
+	MaxWidth  int
+	MaxPixels int
+	Format    string
+	Quality   int
+	Path      string
+	Mode      CaptureMode
+	Profile   bool
 }
 
 // DefaultObservePath returns the default on-disk path for an observe screenshot.
 func DefaultObservePath(format string) string {
-	return filepath.Join(os.TempDir(), DefaultObserveFileName+"."+imageExt(format))
+	return frameartifact.Path(frameartifact.NewToken(), format)
 }
 
 // DefaultScreenshotPath returns the default on-disk path for the screenshot command.
 func DefaultScreenshotPath(format string) string {
-	return filepath.Join(os.TempDir(), DefaultScreenshotFileName+"."+imageExt(format))
+	return frameartifact.Path(frameartifact.NewToken(), format)
 }
 
 func normalizeCaptureOptions(opts CaptureOptions) (CaptureOptions, error) {
@@ -104,7 +105,7 @@ func normalizeCaptureOptions(opts CaptureOptions) (CaptureOptions, error) {
 	if opts.Quality > 100 {
 		opts.Quality = 100
 	}
-	if opts.Path == "" {
+	if opts.Path == "" && !opts.Transient {
 		opts.Path = DefaultScreenshotPath(opts.Format)
 	}
 	return opts, nil
@@ -120,6 +121,7 @@ func CaptureScreenshot(cmd adb.Commander, opts CaptureOptions) (*ScreenshotResul
 	}
 
 	clock := perf.Start()
+	capturedAt := time.Now().UTC()
 	profile := &TimingProfile{}
 	mode := resolveCaptureMode(cmd, opts.Mode)
 	profile.Mode = string(mode)
@@ -143,11 +145,11 @@ func CaptureScreenshot(cmd adb.Commander, opts CaptureOptions) (*ScreenshotResul
 	if complete && haveDisplay {
 		deviceW, deviceH = matchDisplayOrientation(deviceW, deviceH, displayW, displayH)
 	}
+	rotation, rotationErr := input.CurrentRotation(cmd)
 
 	outImg := src
-	if opts.MaxWidth > 0 && deviceW > opts.MaxWidth {
-		newW := opts.MaxWidth
-		newH := deviceH * newW / deviceW
+	newW, newH := scaledDimensions(srcBounds.Dx(), srcBounds.Dy(), opts.MaxWidth, opts.MaxPixels)
+	if newW != srcBounds.Dx() || newH != srcBounds.Dy() {
 		dst := image.NewRGBA(image.Rect(0, 0, newW, newH))
 		draw.BiLinear.Scale(dst, dst.Bounds(), src, srcBounds, draw.Over, nil)
 		outImg = dst
@@ -163,20 +165,38 @@ func CaptureScreenshot(cmd adb.Commander, opts CaptureOptions) (*ScreenshotResul
 		return nil, err
 	}
 
-	if err := os.WriteFile(opts.Path, data, 0644); err != nil {
-		return nil, fmt.Errorf("write screenshot file: %w", err)
+	if opts.Path != "" {
+		if err := atomicfile.Write(opts.Path, data, 0644); err != nil {
+			return nil, fmt.Errorf("write screenshot file: %w", err)
+		}
 	}
 	profile.WriteMs = clock.Lap()
 	profile.TotalMs = clock.Total()
 
+	token := ""
+	if !opts.Transient {
+		if pathToken, ok := frameartifact.TokenFromPath(opts.Path); ok {
+			token = pathToken
+		} else {
+			token = frameartifact.NewToken()
+		}
+	}
+	hash := frameartifact.Hash(data)
 	result := &ScreenshotResult{
 		Format:        opts.Format,
 		Path:          opts.Path,
+		FrameToken:    token,
+		Hash:          hash,
+		CapturedAt:    capturedAt.Format(time.RFC3339Nano),
 		Size:          len(data),
 		DeviceWidth:   deviceW,
 		DeviceHeight:  deviceH,
+		ActionWidth:   deviceW,
+		ActionHeight:  deviceH,
 		ImageWidth:    imageW,
 		ImageHeight:   imageH,
+		Rotation:      rotation,
+		RotationKnown: rotationErr == nil,
 		Scale:         scaleFactor(imageW, deviceW),
 		DisplayWidth:  displayW,
 		DisplayHeight: displayH,
@@ -186,6 +206,30 @@ func CaptureScreenshot(cmd adb.Commander, opts CaptureOptions) (*ScreenshotResul
 	}
 	if opts.Profile {
 		result.Profile = profile
+	}
+	if !opts.Transient {
+		if err := frameartifact.Save(frameartifact.Metadata{
+			Token:         token,
+			Hash:          hash,
+			CapturedAt:    capturedAt,
+			Path:          opts.Path,
+			Format:        opts.Format,
+			CaptureMode:   string(mode),
+			Quality:       opts.Quality,
+			MaxWidth:      opts.MaxWidth,
+			MaxPixels:     opts.MaxPixels,
+			DeviceWidth:   deviceW,
+			DeviceHeight:  deviceH,
+			ActionWidth:   deviceW,
+			ActionHeight:  deviceH,
+			ImageWidth:    imageW,
+			ImageHeight:   imageH,
+			Rotation:      rotation,
+			RotationKnown: rotationErr == nil,
+			Complete:      complete,
+		}); err != nil {
+			return nil, fmt.Errorf("write frame metadata: %w", err)
+		}
 	}
 	return result, nil
 }
@@ -363,15 +407,43 @@ func scaleFactor(imageWidth, deviceWidth int) float64 {
 	return float64(imageWidth) / float64(deviceWidth)
 }
 
+func scaledDimensions(width, height, maxWidth, maxPixels int) (int, int) {
+	if width <= 0 || height <= 0 {
+		return width, height
+	}
+	scale := 1.0
+	if maxWidth > 0 && width > maxWidth {
+		scale = float64(maxWidth) / float64(width)
+	}
+	if maxPixels > 0 && int64(width)*int64(height) > int64(maxPixels) {
+		pixelScale := math.Sqrt(float64(maxPixels) / float64(int64(width)*int64(height)))
+		if pixelScale < scale {
+			scale = pixelScale
+		}
+	}
+	if scale >= 1 {
+		return width, height
+	}
+	newW := int(float64(width) * scale)
+	newH := int(float64(height) * scale)
+	if newW < 1 {
+		newW = 1
+	}
+	if newH < 1 {
+		newH = 1
+	}
+	return newW, newH
+}
+
 // TakeScreenshot captures the device screen via "adb exec-out screencap -p".
 // Returns encoded PNG bytes. If maxWidth > 0, the preview is downscaled.
 // Prefer CaptureScreenshot for new code.
 func TakeScreenshot(cmd adb.Commander, maxWidth int) ([]byte, error) {
 	result, err := CaptureScreenshot(cmd, CaptureOptions{
-		MaxWidth: maxWidth,
-		Format:   "png",
-		Path:     filepath.Join(os.TempDir(), "adb-claw-takescreenshot.png"),
-		Mode:     CaptureModeStream,
+		MaxWidth:  maxWidth,
+		Format:    "png",
+		Mode:      CaptureModeStream,
+		Transient: true,
 	})
 	if err != nil {
 		return nil, err

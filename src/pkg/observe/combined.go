@@ -23,12 +23,13 @@ func Observe(cmd adb.Commander, opts ObserveOptions) *ObserveResult {
 		path = DefaultObservePath(format)
 	}
 	ss, err := CaptureScreenshot(cmd, CaptureOptions{
-		MaxWidth: opts.MaxWidth,
-		Format:   format,
-		Quality:  opts.Quality,
-		Path:     path,
-		Mode:     opts.Mode,
-		Profile:  opts.Profile,
+		MaxWidth:  opts.MaxWidth,
+		MaxPixels: opts.MaxPixels,
+		Format:    format,
+		Quality:   opts.Quality,
+		Path:      path,
+		Mode:      opts.Mode,
+		Profile:   opts.Profile,
 	})
 	if err != nil {
 		result.Errors = append(result.Errors, "screenshot: "+err.Error())

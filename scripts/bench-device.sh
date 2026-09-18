@@ -17,4 +17,6 @@ if [[ -n "$SERIAL" ]]; then
   args+=(-s "$SERIAL")
 fi
 
-"$BIN" "${args[@]}" bench --rounds "$ROUNDS"
+for mode in stream pull; do
+  "$BIN" "${args[@]}" bench --rounds "$ROUNDS" --capture "$mode"
+done

@@ -3,7 +3,7 @@
   "version": "2.0.0",
   "description": "Android device control CLI for Gemini 3.8 Flash Computer Use. Perception is a JPEG frame only. Actions use a 0-999 normalized coordinate grid.",
   "capabilities": {
-    "input_methods": ["adb_input", "unicode_clipboard"],
+    "input_methods": ["adb_input", "unicode_set_text"],
     "stealth_levels": ["off"],
     "humanize": false,
     "unicode_input": true,
@@ -20,32 +20,32 @@
   "tools": [
     {
       "name": "take_screenshot",
-      "description": "Read the latest screen JPEG. Never looks at UI text nodes.",
+      "description": "Create a unique screen JPEG and frame token. Never looks at UI text nodes.",
       "usage": "adb-claw observe --quality 60   OR serve frame.latest",
-      "returns": "path, frame_seq (serve), device/image size, scale, frame_age_ms",
-      "when_to_use": "Before deciding an action. Read the image file. Do not paste JSON."
+      "returns": "unique path, frame_token, hash, captured_at, rotation, action/image size",
+      "when_to_use": "Before deciding an action. Read the returned path and retain its frame_token."
     },
     {
       "name": "click",
       "description": "Tap using Gemini Computer Use 0-999 coordinates.",
-      "usage": "adb-claw tap --normalized X Y   OR serve act {action:tap, frame_seq, x, y}",
-      "when_to_use": "After reading the latest frame. Always pass the frame_seq you saw."
+      "usage": "adb-claw tap --normalized X Y --frame FRAME_TOKEN [--wait-changed 1500]   OR serve act {action:tap, frame_seq, x, y}",
+      "when_to_use": "After reading the latest frame. The one-shot CLI requires its frame_token."
     },
     {
       "name": "long_press",
       "description": "Long press using 0-999 coordinates.",
-      "usage": "adb-claw long-press --normalized X Y [--duration 1000]",
+      "usage": "adb-claw long-press --normalized X Y --frame FRAME_TOKEN [--duration 1000]",
       "when_to_use": "For context menus or press-and-hold controls."
     },
     {
       "name": "scroll",
       "description": "Scroll the screen. Prefer direction pages; swipe also accepts 0-999 endpoints.",
-      "usage": "adb-claw scroll {up|down|left|right} [--pages N]   OR adb-claw swipe --normalized X1 Y1 X2 Y2",
+      "usage": "adb-claw scroll {up|down|left|right} --frame FRAME_TOKEN [--pages N]   OR adb-claw swipe --normalized X1 Y1 X2 Y2 --frame FRAME_TOKEN",
       "when_to_use": "To reveal more content after reading the current frame."
     },
     {
       "name": "type",
-      "description": "Type text into the focused field. Unicode uses an embedded app_process clipboard helper; no APK or IME change.",
+      "description": "Type text into the focused field. Unicode uses embedded app_process ACTION_SET_TEXT; no APK or IME change.",
       "usage": "adb-claw type TEXT",
       "when_to_use": "After clicking an editable field to focus it. Prefer a known deep link when it avoids UI steps."
     },
@@ -70,8 +70,8 @@
     {
       "name": "wait",
       "description": "Wait for an activity or a visual screen change. No text locators.",
-      "usage": "adb-claw wait {--activity NAME | --changed} [--timeout ms]",
-      "when_to_use": "After navigation, instead of a fixed sleep."
+      "usage": "adb-claw wait {--activity NAME | --changed --after-frame FRAME_TOKEN} [--timeout ms]",
+      "when_to_use": "When an action ran without integrated --wait-changed. A changed wait returns a new JPEG path."
     },
     {
       "name": "bench",
@@ -94,13 +94,14 @@
   ],
   "workflow_hints": {
     "image_only": "The only perception input is a JPEG file from observe or frame.latest. Do not request a UI tree.",
-    "normalized_coords": "All model actions use a 1000x1000 (0-999) grid. adb-claw maps them onto the frame's device_width/device_height.",
+    "normalized_coords": "All model actions use a 1000x1000 (0-999) grid plus the latest frame_token. Bare pixels and unbound normalized actions are rejected.",
     "stale_frame": "STALE_FRAME means the screen changed or the frame aged out. Call frame.latest again before acting.",
-    "no_sleep": "Never insert sleep, time.sleep, adb-claw shell sleep, or a timed pause between commands. After tap/swipe/open/key/type, immediately observe or frame.latest.",
-    "wait_after": "One-shot CLI: observe immediately after an action; only wait --changed if that frame is visibly transitional. Serve: frame.wait_after already returns a JPEG path, so never follow it with frame.latest.",
-    "unicode": "Focus the field and call type. Unicode uses adb-claw's embedded app_process clipboard helper. Never install ADBKeyboard, change IME, or call the raw clipboard service.",
+    "no_sleep": "Never insert sleep, time.sleep, adb-claw shell sleep, or a timed pause. Use an action's --wait-changed or wait --changed --after-frame.",
+    "wait_after": "One-shot CLI: an action with --wait-changed returns the next unique JPEG path. Without it, use wait --changed --after-frame. Serve uses frame.wait_after.",
+    "unicode": "Focus the field and call type. Unicode uses adb-claw's embedded app_process ACTION_SET_TEXT helper. Never install ADBKeyboard, change IME, or call the raw clipboard service.",
     "forbidden_shell": "Never use shell for UI hierarchy extraction, layout/accessibility dumpsys, clipboard service calls, or IME changes. Use JPEG perception, app current, and type.",
-    "retry_policy": "Empty/error/placeholder screens are valid outcomes. On the same screen, do not tap the same normalized point more than twice; never switch to raw pixels or node inspection.",
+    "retry_policy": "Empty/error/placeholder screens are valid outcomes. Retry the same hash plus normalized point at most once; never switch to --raw, pull, a fixed path, or node inspection.",
+    "usb_capture": "A physical USB device uses auto/stream. Unique frame paths prevent adapter image caching; do not switch to pull for that symptom.",
     "media": "Adapter default: gemini-3.8-flash, thinking_level=low, media_resolution=medium, inline JPEG. Upgrade to high only for dense small text.",
     "cjk": "Prefer a known deep link to reduce steps; otherwise focus the field and use built-in Unicode type."
   }

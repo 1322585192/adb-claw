@@ -3,14 +3,18 @@ package cmd
 import (
 	"time"
 
+	"github.com/llm-net/adb-claw/pkg/frameartifact"
 	"github.com/llm-net/adb-claw/pkg/input"
 	"github.com/spf13/cobra"
 )
 
 var (
-	scrollPages    int
-	scrollDistance int
-	scrollDuration int
+	scrollPages       int
+	scrollDistance    int
+	scrollDuration    int
+	scrollFrame       string
+	scrollRaw         bool
+	scrollWaitChanged int
 )
 
 var scrollCmd = &cobra.Command{
@@ -18,9 +22,9 @@ var scrollCmd = &cobra.Command{
 	Short: "Scroll the screen",
 	Long: `Scroll in a direction: up, down, left, right.
 Examples:
-  adb-claw scroll down
-  adb-claw scroll up --pages 3
-  adb-claw scroll left --distance 500`,
+  adb-claw scroll down --frame FRAME_TOKEN
+  adb-claw scroll up --pages 3 --frame FRAME_TOKEN
+  adb-claw scroll left --distance 500 --frame FRAME_TOKEN`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		start := time.Now()
@@ -30,10 +34,33 @@ Examples:
 			pages = 1
 		}
 
-		screenW, screenH, err := input.CurrentScreenSize(client)
-		if err != nil {
-			writer.Fail("scroll", "SCREEN_SIZE_FAILED", err.Error(),
-				"Ensure device is connected", start)
+		var (
+			screenW, screenH int
+			baseline         *frameartifact.Metadata
+		)
+		if scrollRaw {
+			var err error
+			screenW, screenH, err = input.CurrentScreenSize(client)
+			if err != nil {
+				writer.Fail("scroll", "SCREEN_SIZE_FAILED", err.Error(),
+					"Ensure device is connected", start)
+				return nil
+			}
+		} else {
+			if scrollFrame == "" {
+				failActionPoint("scroll", staleFrameError{"scroll requires --frame from the latest observe result"}, start)
+				return nil
+			}
+			meta, err := loadActionFrame(scrollFrame)
+			if err != nil {
+				failActionPoint("scroll", err, start)
+				return nil
+			}
+			baseline = meta
+			screenW, screenH = meta.ActionWidth, meta.ActionHeight
+		}
+		if scrollWaitChanged > 0 && baseline == nil {
+			writer.Fail("scroll", "INVALID_ARGS", "--wait-changed requires --frame", "", start)
 			return nil
 		}
 
@@ -78,12 +105,13 @@ Examples:
 			}
 		}
 
-		writer.Success("scroll", map[string]interface{}{
+		writeActionSuccess("scroll", map[string]interface{}{
 			"direction":       direction,
 			"pages":           pages,
 			"distance_pixels": totalScrolled,
+			"frame_token":     scrollFrame,
 			"method":          "adb_swipe",
-		}, start)
+		}, baseline, scrollWaitChanged, start)
 		return nil
 	},
 }
@@ -92,5 +120,8 @@ func init() {
 	scrollCmd.Flags().IntVar(&scrollPages, "pages", 1, "Number of pages to scroll")
 	scrollCmd.Flags().IntVar(&scrollDistance, "distance", 0, "Scroll distance in pixels (0 = auto)")
 	scrollCmd.Flags().IntVar(&scrollDuration, "duration", 300, "Swipe duration in ms")
+	scrollCmd.Flags().StringVar(&scrollFrame, "frame", "", "Frame token returned by observe")
+	scrollCmd.Flags().BoolVar(&scrollRaw, "raw", false, "Use the current device size without a frame (human debugging only)")
+	scrollCmd.Flags().IntVar(&scrollWaitChanged, "wait-changed", 0, "Wait up to N ms and return the next visual frame")
 	rootCmd.AddCommand(scrollCmd)
 }

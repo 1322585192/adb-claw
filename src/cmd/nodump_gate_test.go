@@ -93,6 +93,50 @@ func TestAppProfilesUseImageOnlyAgentCommands(t *testing.T) {
 	}
 }
 
+func TestAgentDocsUseFrameBoundCommands(t *testing.T) {
+	root := findRepoRoot(t)
+	paths := []string{filepath.Join(root, "README.md")}
+	err := filepath.WalkDir(filepath.Join(root, "skills"), func(path string, d fs.DirEntry, err error) error {
+		if err == nil && !d.IsDir() && filepath.Ext(path) == ".md" {
+			paths = append(paths, path)
+		}
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, path := range paths {
+		isSkill := strings.Contains(filepath.ToSlash(path), "/skills/")
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for lineNumber, line := range strings.Split(string(data), "\n") {
+			trimmed := strings.TrimSpace(line)
+			if isSkill && (strings.Contains(trimmed, "adb-claw tap --raw") ||
+				strings.Contains(trimmed, "adb-claw long-press --raw") ||
+				strings.Contains(trimmed, "adb-claw swipe --raw")) {
+				t.Errorf("%s:%d exposes raw pixels to agents: %q", path, lineNumber+1, trimmed)
+			}
+			if (strings.Contains(trimmed, "adb-claw tap --normalized") ||
+				strings.Contains(trimmed, "adb-claw long-press --normalized") ||
+				strings.Contains(trimmed, "adb-claw swipe --normalized")) &&
+				!strings.Contains(trimmed, "--frame") {
+				t.Errorf("%s:%d has unbound normalized action: %q", path, lineNumber+1, trimmed)
+			}
+			if strings.HasPrefix(trimmed, "adb-claw scroll ") &&
+				!strings.Contains(trimmed, "--frame") {
+				t.Errorf("%s:%d has unbound scroll: %q", path, lineNumber+1, trimmed)
+			}
+			if strings.HasPrefix(trimmed, "adb-claw wait --changed") &&
+				!strings.Contains(trimmed, "--after-frame") {
+				t.Errorf("%s:%d has late-baseline changed wait: %q", path, lineNumber+1, trimmed)
+			}
+		}
+	}
+}
+
 func findRepoRoot(t *testing.T) string {
 	t.Helper()
 	wd, err := os.Getwd()

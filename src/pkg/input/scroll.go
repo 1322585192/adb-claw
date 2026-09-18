@@ -9,7 +9,15 @@ import (
 	"github.com/llm-net/adb-claw/pkg/adb"
 )
 
-var wmSizeRe = regexp.MustCompile(`(\d+)x(\d+)`)
+var (
+	wmSizeRe    = regexp.MustCompile(`(\d+)x(\d+)`)
+	rotationRes = []*regexp.Regexp{
+		regexp.MustCompile(`(?i)mCurrentRotation\s*[=:]\s*(?:ROTATION_)?(270|180|90|[0-3])`),
+		regexp.MustCompile(`(?i)SurfaceOrientation\s*[=:]\s*(?:ROTATION_)?(270|180|90|[0-3])`),
+		regexp.MustCompile(`(?i)mRotation\s*[=:]\s*(?:ROTATION_)?(270|180|90|[0-3])`),
+		regexp.MustCompile(`(?i)\brotation\s*[=:]\s*(?:ROTATION_)?(270|180|90|[0-3])`),
+	}
+)
 
 // GetScreenSize returns the current logical screen width and height.
 // An override size is preferred because that is the coordinate space
@@ -65,34 +73,59 @@ func CurrentScreenSize(cmd adb.Commander) (width, height int, err error) {
 	if err != nil {
 		return 0, 0, err
 	}
-	rot := currentRotation(cmd)
-	if rot == 1 || rot == 3 {
+	rot, rotErr := CurrentRotation(cmd)
+	if rotErr == nil && (rot == 1 || rot == 3) {
 		return h, w, nil
 	}
 	return w, h, nil
 }
 
-func currentRotation(cmd adb.Commander) int {
-	result, err := cmd.Shell("dumpsys", "window", "displays")
-	if err != nil {
-		return 0
+// CurrentRotation returns the current Surface rotation (0-3). OEM Android
+// builds expose it under several field names and sometimes as degrees.
+func CurrentRotation(cmd adb.Commander) (int, error) {
+	queries := [][]string{
+		{"dumpsys", "window", "displays"},
+		{"dumpsys", "input"},
 	}
-	for _, line := range strings.Split(result.Stdout, "\n") {
-		line = strings.TrimSpace(line)
-		if !strings.Contains(line, "mCurrentRotation=") {
+	for _, query := range queries {
+		result, err := cmd.Shell(query...)
+		if err != nil {
 			continue
 		}
-		for _, word := range strings.Fields(line) {
-			if strings.HasPrefix(word, "mCurrentRotation=") {
-				val := strings.TrimPrefix(word, "mCurrentRotation=")
-				val = strings.TrimRight(val, ",")
-				if r, err := strconv.Atoi(val); err == nil {
-					return r & 3
-				}
-			}
+		if rotation, ok := ParseRotation(result.Stdout); ok {
+			return rotation, nil
 		}
 	}
-	return 0
+	return 0, fmt.Errorf("could not determine current display rotation")
+}
+
+// ParseRotation accepts common AOSP and OEM dumpsys rotation formats.
+func ParseRotation(stdout string) (rotation int, ok bool) {
+	var valueText string
+	for _, re := range rotationRes {
+		match := re.FindStringSubmatch(stdout)
+		if len(match) == 2 {
+			valueText = match[1]
+			break
+		}
+	}
+	if valueText == "" {
+		return 0, false
+	}
+	value, err := strconv.Atoi(valueText)
+	if err != nil {
+		return 0, false
+	}
+	switch value {
+	case 90:
+		return 1, true
+	case 180:
+		return 2, true
+	case 270:
+		return 3, true
+	default:
+		return value & 3, true
+	}
 }
 
 // ScrollDirection calculates swipe coordinates for a scroll direction.

@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"time"
@@ -15,8 +14,10 @@ import (
 )
 
 var (
-	benchRounds int
-	benchWidth  int
+	benchRounds    int
+	benchWidth     int
+	benchMaxPixels int
+	benchCapture   string
 )
 
 var benchCmd = &cobra.Command{
@@ -53,12 +54,13 @@ Prints count/p50/p95/max in a JSON envelope. Requires a connected device.`,
 
 		tFirst := time.Now()
 		first, err := observe.CaptureScreenshot(client, observe.CaptureOptions{
-			MaxWidth: benchWidth,
-			Format:   "jpeg",
-			Quality:  frame.QualityHigh,
-			Path:     filepath.Join(dir, "first.jpg"),
-			Mode:     "auto",
-			Profile:  true,
+			MaxWidth:  benchWidth,
+			MaxPixels: benchMaxPixels,
+			Format:    "jpeg",
+			Quality:   frame.QualityHigh,
+			Mode:      observe.CaptureMode(benchCapture),
+			Profile:   true,
+			Transient: true,
 		})
 		firstMs = append(firstMs, time.Since(tFirst).Milliseconds())
 		if err == nil && first != nil {
@@ -71,15 +73,15 @@ Prints count/p50/p95/max in a JSON envelope. Requires a connected device.`,
 		}
 
 		for i := 0; i < benchRounds; i++ {
-			path := filepath.Join(dir, fmt.Sprintf("obs-%d.jpg", i))
 			t0 := time.Now()
 			res, err := observe.CaptureScreenshot(client, observe.CaptureOptions{
-				MaxWidth: benchWidth,
-				Format:   "jpeg",
-				Quality:  frame.QualityHigh,
-				Path:     path,
-				Mode:     "auto",
-				Profile:  true,
+				MaxWidth:  benchWidth,
+				MaxPixels: benchMaxPixels,
+				Format:    "jpeg",
+				Quality:   frame.QualityHigh,
+				Mode:      observe.CaptureMode(benchCapture),
+				Profile:   true,
+				Transient: true,
 			})
 			shotMs = append(shotMs, time.Since(t0).Milliseconds())
 			if err == nil && res != nil {
@@ -101,17 +103,19 @@ Prints count/p50/p95/max in a JSON envelope. Requires a connected device.`,
 		}
 
 		writer.Success("bench", map[string]interface{}{
-			"rounds":        benchRounds,
-			"width":         benchWidth,
-			"first_frame":   summarize(firstMs),
-			"screenshot":    summarize(shotMs),
-			"latest_write":  summarize(latestMs),
+			"rounds":         benchRounds,
+			"width":          benchWidth,
+			"max_pixels":     benchMaxPixels,
+			"capture_mode":   benchCapture,
+			"first_frame":    summarize(firstMs),
+			"screenshot":     summarize(shotMs),
+			"latest_write":   summarize(latestMs),
 			"normalized_tap": summarize(tapMs),
-			"visual_change": summarize(changeMs),
+			"visual_change":  summarize(changeMs),
 			"jpeg_bytes_p50": perf.Percentile(int64s(jpegSizes), 50),
-			"capture":       summarize(captureMs),
-			"encode":        summarize(encodeMs),
-			"transfer":      summarize(transferMs),
+			"capture":        summarize(captureMs),
+			"encode":         summarize(encodeMs),
+			"transfer":       summarize(transferMs),
 		}, start)
 		return nil
 	},
@@ -128,5 +132,7 @@ func int64s(in []int) []int64 {
 func init() {
 	benchCmd.Flags().IntVar(&benchRounds, "rounds", 5, "Samples per measurement")
 	benchCmd.Flags().IntVar(&benchWidth, "width", 0, "Optional max screenshot width (0 = native aspect)")
+	benchCmd.Flags().IntVar(&benchMaxPixels, "max-pixels", 0, "Rotation-invariant encoded pixel budget (0 = native)")
+	benchCmd.Flags().StringVar(&benchCapture, "capture", "auto", "Capture mode: auto | stream | pull")
 	rootCmd.AddCommand(benchCmd)
 }

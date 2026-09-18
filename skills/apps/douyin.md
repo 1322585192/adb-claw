@@ -119,7 +119,7 @@ adb-claw open 'snssdk1128://search/result?keyword=遥控车&type=0'
 ```
 1. adb-claw open 'snssdk1128://search/result?keyword=遥控车&type=0'
 2. adb-claw observe
-3. 根据 JPEG 点击分类 Tab（视频/直播/图文等），然后立即 observe
+3. 根据 JPEG 用 `tap --normalized X Y --frame FRAME_TOKEN --wait-changed 1500` 点击分类 Tab，并读取返回的新 JPEG
 ```
 
 深度链接失效时，可聚焦搜索框后直接 `adb-claw type "遥控车"`；不要安装输入法或修改 IME。
@@ -129,8 +129,8 @@ adb-claw open 'snssdk1128://search/result?keyword=遥控车&type=0'
 ```
 1. adb-claw open 'snssdk1128://search/result?keyword={关键词}&type=0'
 2. adb-claw observe
-3. 手动点击"直播"Tab 切换（type=1 参数可能不生效）
-4. 纵向滚动浏览直播列表
+3. 用当前 `FRAME_TOKEN` 手动点击"直播"Tab 切换（type=1 参数可能不生效）
+4. 用新 token 纵向滚动浏览直播列表
 ```
 
 ### 浏览推荐 Feed
@@ -138,13 +138,13 @@ adb-claw open 'snssdk1128://search/result?keyword=遥控车&type=0'
 ```
 1. adb-claw app launch com.ss.android.ugc.aweme
 2. adb-claw observe
-3. adb-claw scroll up
-4. adb-claw observe
+3. adb-claw scroll up --frame FRAME_TOKEN --wait-changed 1500
+4. 读取滚动结果中的新 JPEG path/token
 ```
 
 ### 读取当前视频信息
 
-看 JPEG：作者、描述、点赞/评论数都在画面右侧和底部。用 `--normalized` 点对应图标。
+看 JPEG：作者、描述、点赞/评论数都在画面右侧和底部。用 `--normalized --frame FRAME_TOKEN` 点对应图标。
 
 ### 打开直播间
 

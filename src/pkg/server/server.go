@@ -390,10 +390,11 @@ func (s *Server) commander() adb.Commander {
 
 func captureOne(cmd adb.Commander, seq uint32, width, quality int) (*frame.Frame, error) {
 	res, err := observe.CaptureScreenshot(cmd, observe.CaptureOptions{
-		MaxWidth: width,
-		Format:   "jpeg",
-		Quality:  quality,
-		Mode:     observe.CaptureModeAuto,
+		MaxWidth:  width,
+		Format:    "jpeg",
+		Quality:   quality,
+		Mode:      observe.CaptureModeAuto,
+		Transient: true,
 	})
 	if err != nil {
 		return nil, err
