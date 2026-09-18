@@ -5,7 +5,7 @@
 
 ## 深度链接
 
-优先使用深度链接，可跳过多步 UI 操作，且天然支持中文参数（adb input text 不支持中文）。
+优先使用深度链接，可跳过多步 UI 操作，且天然支持中文参数。
 
 ```bash
 # 通用调用方式（推荐使用 adb-claw open）
@@ -44,21 +44,13 @@ adb-claw open 'snssdk1128://search/result?keyword=遥控车&type=0'
 └─────────────────────────────────────────────────┘
 ```
 
-**关键元素定位**：
-- 搜索按钮: `content_desc="搜索"`，右上角
-- 侧栏按钮: `content_desc` 含 "侧边栏"，左上角（可能带未读消息数）
-- 底部导航项: `resource_id` 含 `0tn`，text 为 "首页"/"朋友"/"消息"/"我"
-- 拍摄按钮: `resource_id` 含 `1ps`，`content_desc="拍摄，按钮"`
-- 用户头像: `content_desc` 含用户名，`resource_id` 含 `user_avatar`
-- 关注按钮（视频右侧）: `content_desc="关注"`
-- 点赞按钮: `content_desc` 含 "点赞" 和 "喜欢{数量}"（如 "未点赞，喜欢438，按钮"）
-- 评论按钮: `content_desc` 含 "评论{数量}"（如 "评论742，按钮"）
-- 收藏按钮: `content_desc` 含 "收藏{数量}"（如 "未选中，收藏53，按钮"）
-- 分享按钮: `content_desc` 含 "分享{数量}"（如 "分享154，按钮"）
-- 音乐按钮: `content_desc` 含 "音乐" 和创作者信息
-- 用户名: `resource_id` 含 `title`，text 为 "@用户名"
-- 视频描述: `resource_id` 含 `desc`
-- 顶部 Tab: `resource_id` 含 `5j4`，水平可滚动（Tab 内容和顺序可能随版本/地区变化）
+**视觉锚点**：
+- 搜索入口通常在右上角，侧栏入口通常在左上角。
+- 头像、关注、点赞、评论、收藏、分享和音乐按钮纵向排列在视频右侧。
+- 用户名和视频描述位于左下；底部是首页、朋友、拍摄、消息和我的导航。
+- 顶部 Tab 可水平滚动，内容和顺序可能随版本或地区变化。
+
+所有锚点只用于理解最新 JPEG。点击必须使用 `--normalized`，不要请求 resource-id、content-desc 或节点文本。
 
 ### 搜索结果页
 
@@ -100,12 +92,7 @@ adb-claw open 'snssdk1128://search/result?keyword=遥控车&type=0'
 └─────────────────────────────────────────────────┘
 ```
 
-**关键元素定位**：
-- 用户头像: `content_desc="用户头像"`
-- 用户名: `resource_id` 含 `tne`
-- 抖音号: `resource_id` 含 `547`
-- 编辑主页: `resource_id` 含 `wdl`，text="编辑主页"
-- 内容 Tab: `content_desc` 含 "作品"/"日常"/"收藏"/"喜欢"
+**视觉锚点**：头像和账号信息在页面上半部，作品/日常/收藏/喜欢 Tab 位于数据区下方。按最新 JPEG 选择归一化坐标。
 
 ## 设备差异
 
@@ -131,17 +118,17 @@ adb-claw open 'snssdk1128://search/result?keyword=遥控车&type=0'
 
 ```
 1. adb-claw open 'snssdk1128://search/result?keyword=遥控车&type=0'
-2. adb-claw wait --changed --timeout 5000
-3. 根据需要点击分类 Tab（视频/直播/图文等）
+2. adb-claw observe --width 720
+3. 根据 JPEG 点击分类 Tab（视频/直播/图文等），然后立即 observe
 ```
 
-不要尝试用 `adb-claw type` 输入中文，直接用深度链接。
+深度链接失效时，可聚焦搜索框后直接 `adb-claw type "遥控车"`；不要安装输入法或修改 IME。
 
 ### 搜索直播
 
 ```
 1. adb-claw open 'snssdk1128://search/result?keyword={关键词}&type=0'
-2. adb-claw wait --changed --timeout 5000
+2. adb-claw observe --width 720
 3. 手动点击"直播"Tab 切换（type=1 参数可能不生效）
 4. 纵向滚动浏览直播列表
 ```
@@ -150,9 +137,9 @@ adb-claw open 'snssdk1128://search/result?keyword=遥控车&type=0'
 
 ```
 1. adb-claw app launch com.ss.android.ugc.aweme
-2. adb-claw wait --changed --timeout 5000
+2. adb-claw observe --width 720
 3. adb-claw scroll up
-4. adb-claw scroll up --pages 3
+4. adb-claw observe --width 720
 ```
 
 ### 读取当前视频信息
@@ -163,8 +150,7 @@ adb-claw open 'snssdk1128://search/result?keyword=遥控车&type=0'
 
 ```
 1. adb-claw open 'snssdk1128://live?room_id={room_id}'
-2. adb-claw wait --changed --timeout 10000
-3. adb-claw observe --width 720
+2. adb-claw observe --width 720
 ```
 
 弹幕和商品信息从截图读取，不要请求文本树。
@@ -178,7 +164,7 @@ adb-claw open 'snssdk1128://search/result?keyword=遥控车&type=0'
 ```
 1. 点击搜索框获得焦点
 2. adb-claw clear-field                            # 清空已有文本
-3. adb-claw type "new search"                       # 仅限 ASCII
+3. adb-claw type "新搜索词"                          # 内置 Unicode 输入
 4. 或者直接用深度链接搜索新关键词（推荐）
 ```
 
@@ -205,13 +191,11 @@ v2 不再抓文本树。暂停不是必须的；直接 `observe` 并按画面点
 
 **解决**: 如果打开了评论面板，按 `adb-claw key BACK` 关闭。首次 tap 暂停视频后不要再次 tap 同一位置。
 
-### 中文输入不可用
+### 中文输入
 
-**现象**: `adb-claw type "中文"` 报错或输入乱码。
+**行为**: `adb-claw type "中文"` 使用内置 Unicode clipboard/paste helper。
 
-**原因**: `adb shell input text` 不支持非 ASCII 字符。
-
-**解决**: 所有涉及中文输入的场景，使用深度链接代替手动输入。
+**建议**: 搜索仍优先使用深度链接；需要手动输入时先聚焦输入框。失败只重试一次，不安装第三方输入法、不修改 IME。
 
 ### 搜索框残留文本
 

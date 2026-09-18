@@ -1,7 +1,7 @@
 ---
 name: adb-claw
 version: 2.0.0
-description: "Your eyes and hands on Android for Gemini 3.8 Flash. See the screen as a JPEG frame, then tap/swipe/type with a 0-999 normalized grid. No UI tree, no text-node locators. Deep links bypass CJK input limits. Manage apps, screen, files, and shell through structured JSON."
+description: "Your eyes and hands on Android for Gemini 3.8 Flash. See the screen as a JPEG frame, then tap/swipe/type with a 0-999 normalized grid. Built-in Unicode input needs no APK or IME change. No UI tree or text-node locators."
 homepage: https://github.com/llm-net/adb-claw
 metadata:
   {
@@ -98,7 +98,8 @@ adb-claw observe --width 720
 - **Image-only observe** — `observe` / `frame.latest` writes a JPEG. JSON never includes image bytes or base64.
 - **Normalized actions** — Model tools use a 1000×1000 (0–999) grid. adb-claw maps onto the live `device_width` × `device_height`.
 - **Persistent frame source** — `serve` keeps a latest-frame buffer (720p, adaptive 540p) so Flash does not relaunch ADB per click.
-- **Deep links bypass CJK limits** — `adb-claw open 'app://search?keyword=中文'`
+- **Built-in Unicode input** — focus a field, then `adb-claw type "中文"`; no APK or IME change
+- **Deep links reduce steps** — prefer `adb-claw open 'app://search?keyword=中文'` when a profile provides one
 - **Wait without sleep** — `wait --changed` or `frame.wait_after` for a new visual hash; `wait --activity` for navigation.
 - **App Profiles** — deep links and visual landmarks for popular apps
 - **Agent-optimized JSON** — `{ok, command, data, error, duration_ms}` with `suggestion` on errors
@@ -185,11 +186,13 @@ adb-claw observe --width 720 --quality 60
 
 **Never tap JPEG pixel coordinates.** Always use `--normalized` (or serve `act` with 0–999) so 720/540/rotation cannot shift the hit point.
 
-For CJK apps, use deep links:
+For CJK apps, prefer deep links; if none exists, focus the field and use built-in Unicode input:
 
 ```bash
 adb-claw open 'snssdk1128://search/result?keyword=猫咪'
-adb-claw wait --activity Search
+# or:
+adb-claw tap --normalized X Y
+adb-claw type "猫咪"
 ```
 
 ## App Profiles
@@ -239,23 +242,23 @@ CLI keeps raw device pixels and adds `--normalized` for the model grid.
 
 ```bash
 adb-claw tap --normalized 500 500
-adb-claw tap 540 960
 adb-claw long-press --normalized 500 500 --duration 2000
 adb-claw swipe --normalized 500 800 500 200
 ```
 
-Skill tools always use `--normalized`.
+Agents always use `--normalized`. Raw device pixels are for explicit human debugging only and must never be inferred from a resized JPEG.
 
 ### type / key / clear-field
 
 ```bash
-adb-claw type "Hello world"     # ASCII only
+adb-claw type "Hello world"
+adb-claw type "王者荣耀"         # built-in Unicode clipboard/paste helper
 adb-claw key HOME
 adb-claw key BACK
 adb-claw clear-field            # focused field only
 ```
 
-For CJK/emoji, use `open` with a deep link.
+`type` requires a focused editable field. It handles Unicode without installing an APK or changing the active IME. Prefer a known deep link when it avoids UI steps.
 
 ### open / scroll / wait
 
@@ -306,20 +309,28 @@ adb-claw device info
 adb-claw doctor
 ```
 
+`shell` is not an escape hatch from image-only mode. It rejects UI hierarchy dumps, layout/accessibility `dumpsys`, raw clipboard binder calls, and IME changes. Never download or install ADBKeyboard or another helper APK.
+
 ## Workflow
 
-```
-1. adb-claw observe --width 720 --quality 60
-2. Read data.screenshot.path
-3. adb-claw tap --normalized X Y
-4. adb-claw observe --width 720     # immediately; no sleep
-   # NEVER: sleep / shell sleep / "wait 1s" between 3 and 4
-   # only if you need the pixels to change first: wait --changed / frame.wait_after
-```
+| What just happened | Next command |
+|--------------------|--------------|
+| `tap` / `scroll` / `key` / `type` | `observe` immediately |
+| `open` / `app launch` | `observe` immediately; only wait if that frame is visibly old/loading and cannot be acted on |
+| One-shot frame is visibly transitional | `wait --changed`, then one `observe` |
+| Serve `act` needs a changed image | `frame.wait_after`; read the returned `path` directly |
+| `frame.wait_after` returned | Read its JPEG; never call `frame.latest` just to duplicate it |
 
 For a long-lived adapter use `adb-claw serve --stdio`.
 
 If the next step is already `observe` / `frame.latest`, skip `wait` — do not sleep and do not wait just to create a gap.
+
+### Stop and retry policy
+
+- An empty result, error page, placeholder, or unchanged screen is an observed state, not proof that the tap failed.
+- If the intended target is still visible after an action, adjust once using the latest JPEG. Do not tap the same normalized point more than twice on the same screen.
+- Never switch to raw pixels, XML, `uiautomator`, `dumpsys`, clipboard service calls, a downloaded APK, or an IME change. Report the visible state or ask the user when the image-only path cannot proceed.
+- Use only adb-claw commands for device work. Do not invoke `curl`, `find`, Python, or another host tool to invent a control workaround.
 
 ## Error Recovery
 
@@ -328,8 +339,8 @@ If the next step is already `observe` / `frame.latest`, skip `wait` — do not s
 | No devices found | Enable USB debugging, reconnect, `adb-claw doctor` |
 | `STALE_FRAME` | Call `frame.latest` / `observe` again |
 | Tap misses | You used image pixels; retry with `--normalized` |
-| `type` fails | Tap the field first; ASCII only |
-| CJK text needed | `adb-claw open` with a deep-link parameter |
+| `type` fails | Keep the field focused and retry once; do not install an IME |
+| CJK text needed | Prefer a profile deep link, otherwise use built-in `type` |
 | Screen is off | `adb-claw screen on` or `screen unlock` |
 
 ## Output Format

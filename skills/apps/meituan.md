@@ -26,9 +26,9 @@ adb-claw open 'imeituan://www.meituan.com/search?q=火锅'
 | Activity | 说明 |
 |----------|------|
 | `com.meituan.android.pt.homepage.activity.MainActivity` | 美团主首页（综合入口） |
-| `com.sankuai.waimai.business.page.homepage.TakeoutActivity` | **外卖频道首页**（UI tree 失败） |
-| `com.sankuai.waimai.business.restaurant.poicontainer.WMRestaurantActivity` | 外卖餐厅详情/菜单（UI tree 失败） |
-| `com.sankuai.waimai.platform.machpro.container.WMMPActivity` | 商品详情/加购/购物车（UI tree 失败） |
+| `com.sankuai.waimai.business.page.homepage.TakeoutActivity` | 外卖频道首页（WebView / RN） |
+| `com.sankuai.waimai.business.restaurant.poicontainer.WMRestaurantActivity` | 外卖餐厅详情/菜单（WebView / RN） |
+| `com.sankuai.waimai.platform.machpro.container.WMMPActivity` | 商品详情/加购/购物车（WebView / RN） |
 | `com.sankuai.meituan.search.result.SearchResultActivity` | 搜索结果页 |
 | `com.dianping.gcmrn.ssr.GCMRNSSRActivity` | 分类浏览页（React Native SSR） |
 | `com.sankuai.titans.adapter.mtapp.KNBWebViewActivity` | 通用 WebView 页面 |
@@ -58,12 +58,10 @@ adb-claw open 'imeituan://www.meituan.com/search?q=火锅'
 └──────────────────────────────────────────────────┘
 ```
 
-**关键元素定位**（原生元素，可通过 UI tree 获取）：
-- 定位地址: text 含城市/地点名
-- 搜索栏: text="搜索外卖、商家或商品"
-- 搜索按钮: text="搜索"
-- 扫一扫: `content_desc="扫一扫按钮"`
-- 底部 Tab: text 为 "视频"/"消息"/"购物车"/"我的"（首页 Tab 无 text）
+**视觉锚点**：
+- 定位地址和搜索栏位于顶部，功能宫格在其下方。
+- 底部依次为首页、视频、消息、购物车、我的。
+- 看最新 JPEG 决定点击位置，只使用 `--normalized`。
 
 ### 首次启动弹窗链（新安装）
 
@@ -103,10 +101,10 @@ adb-claw open 'imeituan://www.meituan.com/search?q=火锅'
 
 进入方式：`adb-claw open 'imeituan://www.meituan.com/waimai'` 或首页点"外卖"宫格。
 
-**实测坐标（1080×2340，Xiaomi）**：
-- 分类图标区在 y≈430-650，可 `tap --text 外卖` 从主页定位
-- **餐厅卡片**：首页加载时分类图标占上半屏，需先 `scroll down` 一页，再 tap x=540, y≈400-600（取决于列表位置）
-- 底部外卖导航：y≈2093，各 Tab 从左到右 x≈75/270/465/660/855
+**视觉锚点**：
+- 分类图标区位于搜索栏下方，餐厅卡片在分类和促销区之后。
+- 若当前帧未出现餐厅卡片，先 `scroll down`，再 `observe`。
+- 底部外卖导航从左到右排列；不同设备必须按 JPEG 重新选择 0–999 坐标。
 
 ### 餐厅菜单页（WMRestaurantActivity）
 
@@ -138,9 +136,9 @@ adb-claw open 'imeituan://www.meituan.com/search?q=火锅'
 - 有"必选品"时（如打包费），按钮显示"未点必选品"，需先选择才能结算
 - "外送"/"自取"可在顶部切换
 
-**实测坐标（1080×2340）**：
-- 菜品右侧 `+` 按钮：x≈960，y 随菜品在屏幕上的位置而定
-- 点击菜品图片/名称区域（x≈400-800）进入商品详情页（WMMPActivity）
+**视觉锚点**：
+- 菜品右侧是圆形 `+` 按钮；图片和名称区域位于卡片中部。
+- 看当前 JPEG 选择按钮或卡片中心，禁止复用历史设备像素。
 
 ### 搜索结果页
 
@@ -162,7 +160,7 @@ adb-claw open 'imeituan://www.meituan.com/search?q=火锅'
 ┌──────────────────────────────────────────────────┐
 │  [商品大图（全宽）]                               │
 ├──────────────────────────────────────────────────┤
-│  ¥原价  新客价¥折扣价           [加入购物车]     │  ← 红色价格条（y≈900-1100）
+│  ¥原价  新客价¥折扣价           [加入购物车]     │  ← 红色价格条
 ├──────────────────────────────────────────────────┤
 │  {商品名} 新客专享               精单 月售N      │
 │  [回头客推荐] [味道赞] [分量足] 等标签            │
@@ -174,10 +172,9 @@ adb-claw open 'imeituan://www.meituan.com/search?q=火锅'
 │  [- N +]              ¥总价  减¥X  [去结算]     │  ← 底部栏（加购后出现）
 ```
 
-**实测坐标（1080×2340，Xiaomi）**：
-- **"加入购物车"按钮**：位于红色价格条右侧，x≈960, **y≈1150-1200**（实测有效范围）
-- 每点击一次数量 +1，多次点击会累加（注意控制）
-- "去结算"按钮：x≈950, y≈2100（底部栏右侧）
+**视觉锚点**：
+- 「加入购物车」位于红色价格条右侧，「去结算」位于底部栏右侧。
+- 每点击一次数量会增加；动作后立即 `observe` 确认，禁止连续盲点。
 
 ## 设备差异
 
@@ -204,15 +201,16 @@ adb-claw wait --activity "com.meituan.android.pt.homepage.activity.MainActivity"
 ### 搜索商家或商品
 
 ```bash
-# 方式 1: 深度链接（推荐，绕过中文输入限制）
+# 方式 1: 深度链接（推荐，步骤最少）
 adb-claw open 'imeituan://www.meituan.com/search?q=火锅'
 
-# 方式 2: 手动搜索（仅限 ASCII 关键词；中文用深度链接）
-# 注意：外卖页 UI tree 失败，搜索栏坐标估算 x=540, y≈220
-adb-claw tap 540 220
+# 方式 2: 手动搜索（内置 Unicode 输入）
+adb-claw observe --width 720
+adb-claw tap --normalized X Y
 adb-claw clear-field
-adb-claw type "coffee"
+adb-claw type "火锅"
 adb-claw key ENTER
+adb-claw observe --width 720
 ```
 
 ### 查找外卖餐厅
@@ -248,16 +246,17 @@ adb-claw tap --normalized 500 400
 adb-claw scroll down
 
 # 3. 加购菜品
-# UI tree 在商家页失败，只能通过坐标点击
+# 商家页是 WebView / RN，按当前 JPEG 使用归一化坐标
 # 方式 A: 点击菜品进入商品详情页（WMMPActivity）
-adb-claw tap 540 {菜品中心y}      # 点菜品图片/名称区域
-adb-claw screenshot               # 确认进入商品详情
+adb-claw tap --normalized X Y      # 点菜品图片/名称区域
+adb-claw observe --width 720       # 确认进入商品详情
 # 在详情页点击"加入购物车"（价格条右侧）
-adb-claw tap 960 1175             # x≈960, y≈1150-1200（实测值）
+adb-claw tap --normalized X Y
+adb-claw observe --width 720
 adb-claw key BACK                 # 返回菜单继续选
 
 # 方式 B: 直接点菜品右侧的"+"按钮
-adb-claw tap 960 {菜品右侧y}      # x≈960，y 对准 + 按钮
+adb-claw tap --normalized X Y
 
 # 4. 检查购物车
 #    底部栏显示：总价 + 配送费 + 起送差额
@@ -334,7 +333,7 @@ adb-claw key BACK
 **解决**:
 1. 每次操作后 `adb-claw app current` 检查是否进入了 `LightBoxActivity`
 2. 如果是弹窗，用 `adb-claw key BACK` 或找关闭按钮处理
-3. 常见关闭按钮: `id=btn_left`（残忍离开）、X 按钮
+3. 看 JPEG 识别「残忍离开」或 X 按钮，再用 `--normalized` 点击
 
 ### 大部分功能要求登录
 
@@ -355,13 +354,11 @@ adb-claw key BACK
 2. 如显示"未点必选品"，点击底部购物车图标展开购物车，查看并选择必选品（通常是打包袋）
 3. 购物车展开后可调整菜品数量（- / +）或清空
 
-### 中文输入不可用
+### 中文输入
 
-**现象**: `adb-claw type "火锅"` 报错或输入乱码。
+**行为**: `adb-claw type "火锅"` 使用内置 Unicode clipboard/paste helper。
 
-**原因**: `adb shell input text` 不支持非 ASCII 字符。
-
-**解决**: 使用深度链接搜索（`imeituan://www.meituan.com/search?q=火锅`），天然支持中文参数（参数名为 `q`）。
+**建议**: 仍优先使用搜索深度链接（参数名为 `q`）；手动输入时先聚焦搜索框。失败只重试一次，不安装输入法或修改 IME。
 
 ---
 
