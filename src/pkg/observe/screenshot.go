@@ -424,8 +424,8 @@ func scaledDimensions(width, height, maxWidth, maxPixels int) (int, int) {
 	if scale >= 1 {
 		return width, height
 	}
-	newW := int(math.Round(float64(width) * scale))
-	newH := int(math.Round(float64(height) * scale))
+	newW := int(float64(width) * scale)
+	newH := int(float64(height) * scale)
 	if newW < 1 {
 		newW = 1
 	}
