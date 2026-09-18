@@ -24,8 +24,9 @@ var observeCmd = &cobra.Command{
 	Long: `Captures a JPEG screenshot and writes it to a file.
 
 JSON never includes image bytes or base64 — only the file path and size/scale
-metadata. Read data.screenshot.path. Act with --normalized 0-999 coordinates
-mapped to data.screenshot.device_width / device_height.`,
+metadata. Read the unique data.screenshot.path and retain frame_token. Act with
+--normalized 0-999 coordinates plus --frame TOKEN; coordinates map to that
+frame's action_width / action_height.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		start := time.Now()
 		writer.Verbose("capturing screenshot frame")
