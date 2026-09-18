@@ -11,7 +11,7 @@ Android device control CLI — built for AI agents, claws, bots, and LLMs. Pure 
 ### Superpowers — What Sets adb-claw Apart
 
 - **Image-only Computer Use** — Built for Gemini 3.8 Flash. The model sees a JPEG frame (`observe` / `frame.latest`) and acts on a 0–999 grid. No UI tree, no text-node locators.
-- **Persistent frame source** — `serve` keeps a capacity-1 latest JPEG at the device's native aspect (optional uniform downscale if frames are stale) so a realtime loop does not relaunch ADB for every click.
+- **Livestream latest frame** — a background pump keeps a capacity-1 JPEG at the device's native aspect. One-shot `observe` copies that newest frame instead of restarting PNG screencap. `serve` uses the same buffer.
 - **Independent audio CLI** — `audio capture` still records REMOTE_SUBMIX (Android 11+) as WAV for external ASR. It is not part of the visual decision loop.
 
 ```bash
@@ -128,8 +128,9 @@ Both platforms use the **Triggers** list in `SKILL.md` to decide when to activat
 
 ```
 adb-claw
-├── observe [--width px] [--max-pixels N] [--file] # unique JPEG + frame token
+├── observe [--width px] [--max-pixels N] [--file] # copy newest livestream JPEG + token
 ├── screenshot [--file path] [--width px] [--max-pixels N]
+├── pump [--daemon] | status | stop # latest-frame livestream (auto-started by observe)
 ├── tap <x> <y> --normalized --frame TOKEN [--wait-changed ms]
 ├── long-press <x> <y> --normalized --frame TOKEN
 ├── swipe <x1> <y1> <x2> <y2> --normalized --frame TOKEN
@@ -310,7 +311,9 @@ src/
 │   ├── adb/              # Commander interface
 │   ├── frame/            # persistent JPEG source
 │   ├── coord/            # 0-999 mapping
-│   ├── observe/          # screenshot fallback
+│   ├── observe/          # livestream snapshot + screenshot fallback
+│   ├── stream/           # latest.jpg sidecar
+│   ├── pump/             # background latest-frame process
 │   ├── server/           # JSONL frame/act protocol
 │   └── output/           # JSON envelope
 ```
@@ -318,7 +321,7 @@ src/
 Key design decisions:
 - **Commander interface** — All packages call ADB through an interface, enabling mock-based testing
 - **Input as top-level commands** — `adb-claw tap` instead of `adb-claw input tap`
-- **Image-only observe** — `observe` writes a JPEG file; JSON never includes image bytes
+- **Image-only observe** — `observe` copies the newest livestream JPEG to a unique file; JSON never includes image bytes
 - **Normalized Computer Use** — Skill actions use a 0–999 grid mapped to live device pixels
 - **Frame DEX with screenshot fallback** — persistent JPEG stream, never a text tree
 - **Minimal device footprint** — Pure `adb` plus an optional Frame DEX that exits with the session

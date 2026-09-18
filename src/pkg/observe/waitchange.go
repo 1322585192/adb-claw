@@ -6,6 +6,7 @@ import (
 
 	"github.com/llm-net/adb-claw/pkg/adb"
 	"github.com/llm-net/adb-claw/pkg/frameartifact"
+	"github.com/llm-net/adb-claw/pkg/stream"
 )
 
 // ChangeResult is the newest captured frame and whether it differs from the
@@ -28,6 +29,22 @@ func WaitForChange(cmd adb.Commander, baseline *frameartifact.Metadata, timeout,
 	if interval <= 0 {
 		interval = 100 * time.Millisecond
 	}
+	if useLiveStreamMeta(baseline) {
+		key := stream.ResolveKey(cmd)
+		if EnsureStream != nil {
+			_ = EnsureStream(cmd, ObserveOptions{
+				MaxWidth:  baseline.MaxWidth,
+				MaxPixels: baseline.MaxPixels,
+				Format:    baseline.Format,
+				Quality:   baseline.Quality,
+				Mode:      CaptureMode(baseline.CaptureMode),
+			})
+		}
+		if stream.Running(key) || stream.Fresh(key, 3*time.Second) {
+			return waitStreamChange(key, baseline, timeout, interval)
+		}
+	}
+
 	deadline := time.Now().Add(timeout)
 	result := &ChangeResult{}
 	for {

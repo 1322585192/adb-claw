@@ -31,6 +31,7 @@ public class ADBClawBridge {
     private static volatile int targetWidth = 0;
     private static volatile int jpegQuality = 60;
     private static volatile int intervalMs = 250;
+    private static volatile boolean once = false;
     private static volatile boolean running = true;
 
     private static final Object lock = new Object();
@@ -45,6 +46,8 @@ public class ADBClawBridge {
                 targetWidth = Integer.parseInt(args[++i]);
             } else if ("--quality".equals(args[i]) && i + 1 < args.length) {
                 jpegQuality = Integer.parseInt(args[++i]);
+            } else if ("--once".equals(args[i])) {
+                once = true;
             }
         }
 
@@ -54,6 +57,26 @@ public class ADBClawBridge {
         } catch (Exception e) {
             err.println("[ADBClawBridge] connect failed: " + e.getMessage());
             System.exit(1);
+            return;
+        }
+
+        if (once) {
+            try {
+                byte[] packet = capture(ui, 1);
+                if (packet != nilBytes()) {
+                    System.out.write(packet);
+                    System.out.flush();
+                }
+            } catch (Exception e) {
+                err.println("[ADBClawBridge] once: " + e.getMessage());
+                System.exit(1);
+                return;
+            } finally {
+                try { disconnect(ui); } catch (Exception ignored) {}
+                if (handlerThread != null) {
+                    handlerThread.quit();
+                }
+            }
             return;
         }
 

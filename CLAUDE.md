@@ -46,7 +46,9 @@ src/
     ├── adb/                # Commander 接口
     ├── frame/              # 持久 JPEG 帧源 + 容量 1 缓冲
     ├── coord/              # 0-999 ↔ 设备像素
-    ├── observe/            # 截屏（screencap 回退）
+    ├── observe/            # observe 挂 livestream；screencap 回退
+    ├── stream/             # latest.jpg + sidecar
+    ├── pump/               # 后台持续出帧（只留最新一帧）
     ├── server/             # serve JSONL：frame.latest / act
     ├── input/              # tap/swipe/key/type
     ├── device/             # 屏幕状态
@@ -76,6 +78,7 @@ Go 1.24，依赖 cobra v1.10.2 + golang.org/x/image v0.36.0。
 - **图片-only** — observe 每帧返回唯一 JPEG 路径、hash 和 token，不返回 UI 节点
 - **帧绑定坐标** — Skill 使用 `--normalized --frame TOKEN`；裸设备像素必须显式 `--raw`
 - **Frame DEX** — `UiAutomation.takeScreenshot()` + 设备端 JPEG；写阻塞时丢中间帧
+- **Livestream** — 后台 `pump` 只保留最新一帧；一次性 `observe` / `--wait-changed` 拷贝该帧，不重开 PNG screencap
 - **自适应** — 默认原分辨率/q60，帧龄或传输 P95 超门槛按原比例降到宽 540/q50，会话内不自动升档
 - **回退** — DEX 不可用时回退 `screencap`，绝不回退文本树
 - **文本输入安全** — ASCII 走 `adb shell input text`；Unicode 由内嵌 DEX 通过 `ACTION_SET_TEXT` 写入焦点控件，不安装 APK、不切换 IME
@@ -87,6 +90,7 @@ adb-claw
 ├── device list | info
 ├── observe [--width px] [--max-pixels N] [--capture auto|stream|pull] [--profile]
 ├── screenshot [--file path] [--width px] [--max-pixels N]
+├── pump [--daemon] | status | stop
 ├── tap <x> <y> --normalized --frame TOKEN [--wait-changed ms]
 ├── long-press <x> <y> --normalized --frame TOKEN [--duration ms]
 ├── swipe <x1> <y1> <x2> <y2> --normalized --frame TOKEN
@@ -127,7 +131,7 @@ adb-claw
 
 ## 技术方案
 
-标准 `adb` 完成输入、截屏回退、App/屏幕管理。实时路径由 Frame DEX（`helper/ADBClawBridge.java`）通过 `app_process` 持续输出长度前缀 JPEG。Unicode 输入 DEX（`helper/ADBClawInput.java`）通过 accessibility `ACTION_SET_TEXT` 写入焦点控件，不安装设备应用。宿主只保留最新一帧。产品目标见 `docs/product-and-research.md`。
+标准 `adb` 完成输入、截屏回退、App/屏幕管理。实时路径由 Frame DEX（`helper/ADBClawBridge.java`）通过 `app_process` 持续输出长度前缀 JPEG；后台 `pump` 只保留最新一帧，一次性 `observe` 拷贝该帧。Unicode 输入 DEX（`helper/ADBClawInput.java`）通过 accessibility `ACTION_SET_TEXT` 写入焦点控件，不安装设备应用。产品目标见 `docs/product-and-research.md`。
 
 ## 音频采集与 ASR 协作
 
