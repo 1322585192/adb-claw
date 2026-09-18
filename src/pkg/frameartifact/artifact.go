@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"time"
 
@@ -136,54 +135,6 @@ func validToken(token string) bool {
 		}
 	}
 	return true
-}
-
-type entry struct {
-	token string
-	meta  Metadata
-	mod   time.Time
-}
-
-func prune(now time.Time) {
-	files, err := os.ReadDir(Dir())
-	if err != nil {
-		return
-	}
-	entries := make([]entry, 0, len(files))
-	for _, file := range files {
-		if file.IsDir() || filepath.Ext(file.Name()) != ".json" {
-			continue
-		}
-		token := strings.TrimSuffix(file.Name(), ".json")
-		data, err := os.ReadFile(filepath.Join(Dir(), file.Name()))
-		if err != nil {
-			continue
-		}
-		var meta Metadata
-		if json.Unmarshal(data, &meta) != nil || meta.Token != token {
-			continue
-		}
-		info, err := file.Info()
-		if err != nil {
-			continue
-		}
-		entries = append(entries, entry{token: token, meta: meta, mod: info.ModTime()})
-	}
-	sort.Slice(entries, func(i, j int) bool {
-		if !entries[i].meta.CapturedAt.Equal(entries[j].meta.CapturedAt) {
-			return entries[i].meta.CapturedAt.After(entries[j].meta.CapturedAt)
-		}
-		return entries[i].token > entries[j].token
-	})
-	for i, item := range entries {
-		if i < MaxFrames && now.Sub(item.mod) <= MaxAge {
-			continue
-		}
-		_ = os.Remove(metadataPath(item.token))
-		if insideDir(item.meta.Path, Dir()) {
-			_ = os.Remove(item.meta.Path)
-		}
-	}
 }
 
 func insideDir(path, dir string) bool {

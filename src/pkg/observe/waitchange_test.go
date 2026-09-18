@@ -5,6 +5,7 @@ import (
 	"image"
 	"image/color"
 	"image/png"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -50,6 +51,13 @@ func TestWaitForChangeUsesPriorFrameHash(t *testing.T) {
 	}
 	if result.Screenshot.FrameToken == first.FrameToken || result.Screenshot.Path == first.Path {
 		t.Fatal("changed frame must have a new token and unique path")
+	}
+	jpgs, err := filepath.Glob(filepath.Join(frameartifact.Dir(), "*.jpg"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(jpgs) != 2 {
+		t.Fatalf("persisted jpegs = %d, want 2 (baseline + final wait frame)", len(jpgs))
 	}
 }
 

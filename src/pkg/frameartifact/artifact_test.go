@@ -55,6 +55,22 @@ func TestSaveLoadAndPrune(t *testing.T) {
 	}
 }
 
+func TestPruneRemovesOrphanImages(t *testing.T) {
+	t.Setenv("TMPDIR", t.TempDir())
+	token := NewToken()
+	path := Path(token, "jpeg")
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("orphan"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	Prune()
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("orphan jpeg still present: %v", err)
+	}
+}
+
 func TestLoadRejectsTraversal(t *testing.T) {
 	t.Setenv("TMPDIR", t.TempDir())
 	if _, err := Load("../secret"); err == nil {

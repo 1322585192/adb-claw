@@ -2,6 +2,7 @@ package observe
 
 import (
 	"github.com/llm-net/adb-claw/pkg/adb"
+	"github.com/llm-net/adb-claw/pkg/frameartifact"
 	"github.com/llm-net/adb-claw/pkg/perf"
 )
 
@@ -14,6 +15,7 @@ type ObserveResult struct {
 
 // Observe captures the current screen image. There is no UI tree.
 func Observe(cmd adb.Commander, opts ObserveOptions) *ObserveResult {
+	frameartifact.Prune()
 	clock := perf.Start()
 	result := &ObserveResult{}
 

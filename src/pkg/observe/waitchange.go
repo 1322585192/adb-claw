@@ -55,6 +55,7 @@ func WaitForChange(cmd adb.Commander, baseline *frameartifact.Metadata, timeout,
 			Format:    baseline.Format,
 			Quality:   baseline.Quality,
 			Mode:      CaptureMode(baseline.CaptureMode),
+			Transient: true,
 		})
 		if err != nil {
 			return nil, err
@@ -65,6 +66,9 @@ func WaitForChange(cmd adb.Commander, baseline *frameartifact.Metadata, timeout,
 			frame.ActionWidth != baseline.ActionWidth ||
 			frame.ActionHeight != baseline.ActionHeight
 		if result.Changed || !time.Now().Before(deadline) {
+			if err := persistWaitFrame(frame); err != nil {
+				return nil, err
+			}
 			return result, nil
 		}
 		time.Sleep(minDuration(interval, time.Until(deadline)))
