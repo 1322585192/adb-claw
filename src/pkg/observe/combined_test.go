@@ -16,21 +16,6 @@ type mockObserveCommander struct {
 }
 
 func (m *mockObserveCommander) Shell(args ...string) (*adb.Result, error) {
-	if len(args) == 1 && strings.Contains(args[0], "uiautomator dump") {
-		return &adb.Result{Stdout: sampleXML}, nil
-	}
-	if len(args) >= 2 && args[0] == "sh" && args[1] == "-c" {
-		return &adb.Result{Stdout: sampleXML}, nil
-	}
-	if len(args) >= 2 && args[0] == "uiautomator" && args[1] == "dump" {
-		return &adb.Result{Stdout: "UI hierchary dumped to: " + args[2] + "\n"}, nil
-	}
-	if len(args) >= 1 && args[0] == "cat" {
-		return &adb.Result{Stdout: sampleXML}, nil
-	}
-	if len(args) >= 1 && args[0] == "rm" {
-		return &adb.Result{}, nil
-	}
 	return &adb.Result{}, nil
 }
 
@@ -46,9 +31,6 @@ func (m *mockObserveCommander) RawCommand(args ...string) (*adb.Result, error) {
 }
 
 func TestObserveDefaultPathWritesFile(t *testing.T) {
-	// Isolate DefaultObservePath by using a unique format path via -- we pass Path.
-	// Default path writes are covered by Observe() when Path is empty; skip if we cannot
-	// control TMPDIR safely alongside parallel tests.
 	t.Setenv("TMPDIR", t.TempDir())
 	cmd := &mockObserveCommander{png: solidPNG(80, 120)}
 	result := Observe(cmd, ObserveOptions{Format: "jpeg"})
@@ -63,45 +45,35 @@ func TestObserveDefaultPathWritesFile(t *testing.T) {
 	}
 }
 
-func TestObserveWritesJPEGFileKeepsDeviceCoords(t *testing.T) {
+func TestObserveWritesJPEGFileNoUITree(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "obs.jpg")
 	cmd := &mockObserveCommander{png: solidPNG(1080, 2340)}
 
 	result := Observe(cmd, ObserveOptions{
 		Format:  "jpeg",
-		Quality: 70,
+		Quality: 60,
 		Path:    path,
 	})
 	if result.Screenshot == nil {
 		t.Fatalf("screenshot missing: %v", result.Errors)
 	}
-	if result.UI == nil {
-		t.Fatalf("ui tree missing: %v", result.Errors)
-	}
-	rawJSON, err := json.Marshal(result.Screenshot)
+	rawJSON, err := json.Marshal(result)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(string(rawJSON), "base64") {
+	s := string(rawJSON)
+	if strings.Contains(s, "base64") {
 		t.Errorf("JSON must never contain base64: %s", rawJSON)
 	}
-	if result.Screenshot.Scale != 1 {
-		t.Errorf("scale = %v, want 1", result.Screenshot.Scale)
+	if strings.Contains(s, `"ui"`) || strings.Contains(s, "elements") || strings.Contains(s, "state_id") {
+		t.Errorf("observe must not return a UI tree: %s", rawJSON)
 	}
 	if result.Screenshot.DeviceWidth != 1080 {
 		t.Errorf("device_width = %d, want 1080", result.Screenshot.DeviceWidth)
 	}
-
-	el := result.UI.Elements[0]
-	if el.Center.X != 540 || el.Center.Y != 150 {
-		t.Errorf("UI center = (%d,%d), want device pixels (540,150)", el.Center.X, el.Center.Y)
-	}
-	if result.UI.Package != "com.example" {
-		t.Errorf("package = %q", result.UI.Package)
-	}
 }
 
-func TestObserveScaledPreviewDoesNotChangeUICoords(t *testing.T) {
+func TestObserveScaledPreviewKeepsDeviceSize(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "obs.jpg")
 	cmd := &mockObserveCommander{png: solidPNG(1080, 2340)}
 
@@ -110,41 +82,13 @@ func TestObserveScaledPreviewDoesNotChangeUICoords(t *testing.T) {
 		Format:   "jpeg",
 		Path:     path,
 	})
-	if result.Screenshot == nil || result.UI == nil {
+	if result.Screenshot == nil {
 		t.Fatalf("partial result: %+v errors=%v", result.Screenshot, result.Errors)
 	}
 	if result.Screenshot.Scale != 0.5 {
 		t.Errorf("scale = %v, want 0.5", result.Screenshot.Scale)
 	}
-	found := result.UI.FindByText("Login")
-	if len(found) != 1 {
-		t.Fatalf("expected 1 Login element, got %d", len(found))
-	}
-	el := found[0]
-	if el.Center.X != 540 || el.Center.Y != 550 {
-		t.Errorf("Login center = (%d,%d), want device pixels (540,550) not preview pixels", el.Center.X, el.Center.Y)
-	}
-	if len(result.Errors) > 0 {
-		t.Errorf("unexpected errors: %v", result.Errors)
-	}
-}
-
-func TestObserveStreamEmitsPartialEvents(t *testing.T) {
-	t.Setenv("TMPDIR", t.TempDir())
-	path := filepath.Join(t.TempDir(), "obs.jpg")
-	cmd := &mockObserveCommander{png: solidPNG(80, 120)}
-
-	var kinds []string
-	result := ObserveStream(cmd, ObserveOptions{Format: "jpeg", Path: path, Profile: true}, func(ev ObserveEvent) {
-		kinds = append(kinds, ev.Kind)
-	})
-	if result.Screenshot == nil || result.UI == nil {
-		t.Fatalf("incomplete result: %+v errors=%v", result, result.Errors)
-	}
-	if result.StateID == "" {
-		t.Fatal("expected state_id")
-	}
-	if len(kinds) != 2 {
-		t.Fatalf("events = %v, want screenshot and ui", kinds)
+	if result.Screenshot.DeviceWidth != 1080 || result.Screenshot.DeviceHeight != 2340 {
+		t.Errorf("device size changed: %dx%d", result.Screenshot.DeviceWidth, result.Screenshot.DeviceHeight)
 	}
 }

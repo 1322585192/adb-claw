@@ -5,190 +5,73 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/llm-net/adb-claw/pkg/coord"
 	"github.com/llm-net/adb-claw/pkg/input"
 	"github.com/spf13/cobra"
 )
 
 var (
-	tapIndex        int
-	tapID           string
-	tapText         string
-	refreshElements bool
+	tapNormalized       bool
+	longPressNormalized bool
+	swipeNormalized     bool
 )
 
 var tapCmd = &cobra.Command{
-	Use:   "tap [x y]",
-	Short: "Tap on a coordinate or UI element",
-	Long: `Tap on a specific location. Can target by:
-  - Coordinates: adb-claw tap 540 1200
-  - Element index: adb-claw tap --index 3
-  - Resource ID: adb-claw tap --id "btn_login"
-  - Text content: adb-claw tap --text "Login"`,
+	Use:   "tap <x> <y>",
+	Short: "Tap a coordinate (device pixels or --normalized 0-999)",
+	Long: `Tap a location.
+  Device pixels:     adb-claw tap 540 1200
+  Normalized 0-999:  adb-claw tap --normalized 500 500`,
+	Args: cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		start := time.Now()
-
-		// Determine target coordinates
-		var x, y int
-		var targetInfo map[string]interface{}
-
-		switch {
-		case cmd.Flags().Changed("index"):
-			el, err := resolveElementByIndex(tapIndex)
-			if err != nil {
-				writer.Fail("tap", resolveErrorCode(err), err.Error(),
-					"Run observe first, pass coordinates, or use --refresh", start)
-				return nil
-			}
-			x, y = el.Center.X, el.Center.Y
-			targetInfo = elementInfo(el)
-
-		case tapID != "":
-			el, err := resolveElementByID(tapID)
-			if err != nil {
-				writer.Fail("tap", resolveErrorCode(err), err.Error(),
-					"Run observe first, pass coordinates, or use --refresh", start)
-				return nil
-			}
-			x, y = el.Center.X, el.Center.Y
-			targetInfo = elementInfo(el)
-
-		case tapText != "":
-			el, err := resolveElementByText(tapText)
-			if err != nil {
-				writer.Fail("tap", resolveErrorCode(err), err.Error(),
-					"Run observe first, pass coordinates, or use --refresh", start)
-				return nil
-			}
-			x, y = el.Center.X, el.Center.Y
-			targetInfo = elementInfo(el)
-
-		default:
-			if len(args) < 2 {
-				writer.Fail("tap", "MISSING_ARGS",
-					"Specify coordinates (x y) or use --index/--id/--text",
-					"Example: adb-claw tap 540 1200", start)
-				return nil
-			}
-			var err error
-			x, err = strconv.Atoi(args[0])
-			if err != nil {
-				writer.Fail("tap", "INVALID_ARGS", "Invalid x coordinate: "+args[0], "", start)
-				return nil
-			}
-			y, err = strconv.Atoi(args[1])
-			if err != nil {
-				writer.Fail("tap", "INVALID_ARGS", "Invalid y coordinate: "+args[1], "", start)
-				return nil
-			}
+		x, y, err := parsePoint(args[0], args[1], tapNormalized)
+		if err != nil {
+			writer.Fail("tap", "INVALID_ARGS", err.Error(), "Example: adb-claw tap --normalized 500 500", start)
+			return nil
 		}
-
 		writer.Verbose("tapping at (%d, %d)", x, y)
 		if err := input.Tap(client, x, y); err != nil {
 			writer.Fail("tap", "TAP_FAILED", err.Error(), "", start)
 			return nil
 		}
-
-		data := map[string]interface{}{
-			"x":      x,
-			"y":      y,
-			"method": "adb_input",
-		}
-		if targetInfo != nil {
-			data["element"] = targetInfo
-		}
-		writer.Success("tap", data, start)
+		writer.Success("tap", map[string]interface{}{
+			"x":          x,
+			"y":          y,
+			"normalized": tapNormalized,
+			"method":     "adb_input",
+		}, start)
 		return nil
 	},
 }
 
 var (
 	longPressDuration int
-	longPressIndex    int
-	longPressID       string
-	longPressText     string
 )
 
 var longPressCmd = &cobra.Command{
-	Use:   "long-press [x y]",
-	Short: "Long press at a coordinate or UI element",
-	Long: `Long press on a specific location. Can target by:
-  - Coordinates: adb-claw long-press 540 1200
-  - Element index: adb-claw long-press --index 3
-  - Resource ID: adb-claw long-press --id "btn_login"
-  - Text content: adb-claw long-press --text "Login"`,
+	Use:   "long-press <x> <y>",
+	Short: "Long press a coordinate (device pixels or --normalized 0-999)",
+	Args:  cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		start := time.Now()
-
-		var x, y int
-		var targetInfo map[string]interface{}
-
-		switch {
-		case cmd.Flags().Changed("index"):
-			el, err := resolveElementByIndex(longPressIndex)
-			if err != nil {
-				writer.Fail("long-press", resolveErrorCode(err), err.Error(),
-					"Run observe first, pass coordinates, or use --refresh", start)
-				return nil
-			}
-			x, y = el.Center.X, el.Center.Y
-			targetInfo = elementInfo(el)
-
-		case longPressID != "":
-			el, err := resolveElementByID(longPressID)
-			if err != nil {
-				writer.Fail("long-press", resolveErrorCode(err), err.Error(),
-					"Run observe first, pass coordinates, or use --refresh", start)
-				return nil
-			}
-			x, y = el.Center.X, el.Center.Y
-			targetInfo = elementInfo(el)
-
-		case longPressText != "":
-			el, err := resolveElementByText(longPressText)
-			if err != nil {
-				writer.Fail("long-press", resolveErrorCode(err), err.Error(),
-					"Run observe first, pass coordinates, or use --refresh", start)
-				return nil
-			}
-			x, y = el.Center.X, el.Center.Y
-			targetInfo = elementInfo(el)
-
-		default:
-			if len(args) < 2 {
-				writer.Fail("long-press", "MISSING_ARGS",
-					"Specify coordinates (x y) or use --index/--id/--text",
-					"Example: adb-claw long-press 540 1200", start)
-				return nil
-			}
-			var err error
-			x, err = strconv.Atoi(args[0])
-			if err != nil {
-				writer.Fail("long-press", "INVALID_ARGS", "Invalid x: "+args[0], "", start)
-				return nil
-			}
-			y, err = strconv.Atoi(args[1])
-			if err != nil {
-				writer.Fail("long-press", "INVALID_ARGS", "Invalid y: "+args[1], "", start)
-				return nil
-			}
+		x, y, err := parsePoint(args[0], args[1], longPressNormalized)
+		if err != nil {
+			writer.Fail("long-press", "INVALID_ARGS", err.Error(), "", start)
+			return nil
 		}
-
 		writer.Verbose("long-pressing at (%d, %d) for %dms", x, y, longPressDuration)
 		if err := input.LongPress(client, x, y, longPressDuration); err != nil {
 			writer.Fail("long-press", "LONG_PRESS_FAILED", err.Error(), "", start)
 			return nil
 		}
-
-		data := map[string]interface{}{
+		writer.Success("long-press", map[string]interface{}{
 			"x":           x,
 			"y":           y,
 			"duration_ms": longPressDuration,
+			"normalized":  longPressNormalized,
 			"method":      "adb_input",
-		}
-		if targetInfo != nil {
-			data["element"] = targetInfo
-		}
-		writer.Success("long-press", data, start)
+		}, start)
 		return nil
 	},
 }
@@ -203,31 +86,28 @@ var swipeCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(4),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		start := time.Now()
-		coords := make([]int, 4)
-		names := []string{"x1", "y1", "x2", "y2"}
-		for i := 0; i < 4; i++ {
-			v, err := strconv.Atoi(args[i])
-			if err != nil {
-				writer.Fail("swipe", "INVALID_ARGS",
-					fmt.Sprintf("Invalid %s: %s", names[i], args[i]), "", start)
-				return nil
-			}
-			coords[i] = v
+		x1, y1, err := parsePoint(args[0], args[1], swipeNormalized)
+		if err != nil {
+			writer.Fail("swipe", "INVALID_ARGS", err.Error(), "", start)
+			return nil
 		}
-
-		writer.Verbose("swiping (%d,%d) → (%d,%d) in %dms",
-			coords[0], coords[1], coords[2], coords[3], swipeDuration)
-		if err := input.Swipe(client, coords[0], coords[1], coords[2], coords[3], swipeDuration); err != nil {
+		x2, y2, err := parsePoint(args[2], args[3], swipeNormalized)
+		if err != nil {
+			writer.Fail("swipe", "INVALID_ARGS", err.Error(), "", start)
+			return nil
+		}
+		writer.Verbose("swiping (%d,%d) → (%d,%d) in %dms", x1, y1, x2, y2, swipeDuration)
+		if err := input.Swipe(client, x1, y1, x2, y2, swipeDuration); err != nil {
 			writer.Fail("swipe", "SWIPE_FAILED", err.Error(), "", start)
 			return nil
 		}
-
 		writer.Success("swipe", map[string]interface{}{
-			"x1":          coords[0],
-			"y1":          coords[1],
-			"x2":          coords[2],
-			"y2":          coords[3],
+			"x1":          x1,
+			"y1":          y1,
+			"x2":          x2,
+			"y2":          y2,
 			"duration_ms": swipeDuration,
+			"normalized":  swipeNormalized,
 			"method":      "adb_input",
 		}, start)
 		return nil
@@ -241,13 +121,11 @@ var keyCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		start := time.Now()
 		key := args[0]
-
 		writer.Verbose("sending key event: %s", key)
 		if err := input.KeyEvent(client, key); err != nil {
 			writer.Fail("key", "KEY_FAILED", err.Error(), "", start)
 			return nil
 		}
-
 		writer.Success("key", map[string]interface{}{
 			"key":    key,
 			"method": "adb_input",
@@ -263,14 +141,12 @@ var typeCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		start := time.Now()
 		text := args[0]
-
 		writer.Verbose("typing text: %q", text)
 		if err := input.TypeText(client, text); err != nil {
 			writer.Fail("type", "TYPE_FAILED", err.Error(),
 				"Ensure an input field is focused first", start)
 			return nil
 		}
-
 		writer.Success("type", map[string]interface{}{
 			"text":   text,
 			"length": len(text),
@@ -280,19 +156,38 @@ var typeCmd = &cobra.Command{
 	},
 }
 
+func parsePoint(xs, ys string, normalized bool) (int, int, error) {
+	x, err := strconv.Atoi(xs)
+	if err != nil {
+		return 0, 0, fmt.Errorf("invalid x: %s", xs)
+	}
+	y, err := strconv.Atoi(ys)
+	if err != nil {
+		return 0, 0, fmt.Errorf("invalid y: %s", ys)
+	}
+	if !normalized {
+		return x, y, nil
+	}
+	if err := coord.ValidateNormalized("x", x); err != nil {
+		return 0, 0, err
+	}
+	if err := coord.ValidateNormalized("y", y); err != nil {
+		return 0, 0, err
+	}
+	w, h, err := input.CurrentScreenSize(client)
+	if err != nil {
+		return 0, 0, err
+	}
+	p := coord.Denormalize(x, y, w, h)
+	return p.X, p.Y, nil
+}
+
 func init() {
-	tapCmd.Flags().IntVar(&tapIndex, "index", -1, "Tap element by UI tree index from the last observe snapshot")
-	tapCmd.Flags().StringVar(&tapID, "id", "", "Tap element by resource-id from the last observe snapshot")
-	tapCmd.Flags().StringVar(&tapText, "text", "", "Tap element by text content from the last observe snapshot")
-	tapCmd.Flags().BoolVar(&refreshElements, "refresh", false, "Re-dump the UI tree instead of using the last observe snapshot")
-
+	tapCmd.Flags().BoolVar(&tapNormalized, "normalized", false, "Treat x y as Gemini 0-999 grid coordinates")
 	longPressCmd.Flags().IntVar(&longPressDuration, "duration", 1000, "Long press duration in ms")
-	longPressCmd.Flags().IntVar(&longPressIndex, "index", -1, "Long press element by UI tree index from the last observe snapshot")
-	longPressCmd.Flags().StringVar(&longPressID, "id", "", "Long press element by resource-id from the last observe snapshot")
-	longPressCmd.Flags().StringVar(&longPressText, "text", "", "Long press element by text content from the last observe snapshot")
-	longPressCmd.Flags().BoolVar(&refreshElements, "refresh", false, "Re-dump the UI tree instead of using the last observe snapshot")
-
+	longPressCmd.Flags().BoolVar(&longPressNormalized, "normalized", false, "Treat x y as Gemini 0-999 grid coordinates")
 	swipeCmd.Flags().IntVar(&swipeDuration, "duration", 300, "Swipe duration in ms")
+	swipeCmd.Flags().BoolVar(&swipeNormalized, "normalized", false, "Treat coordinates as Gemini 0-999 grid")
 
 	rootCmd.AddCommand(tapCmd)
 	rootCmd.AddCommand(longPressCmd)

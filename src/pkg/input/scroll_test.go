@@ -2,6 +2,8 @@ package input
 
 import (
 	"testing"
+
+	"github.com/llm-net/adb-claw/pkg/adb"
 )
 
 func TestScrollDirection(t *testing.T) {
@@ -106,6 +108,33 @@ func TestScrollInBounds(t *testing.T) {
 	if y2 < 400 || y2 > 1600 {
 		t.Errorf("y2=%d out of bounds [400, 1600]", y2)
 	}
+}
+
+func TestCurrentScreenSizeRotates(t *testing.T) {
+	cmd := &fakeSizeCmd{size: "Physical size: 1080x2340\n", rot: "mCurrentRotation=1"}
+	w, h, err := CurrentScreenSize(cmd)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w != 2340 || h != 1080 {
+		t.Fatalf("landscape size = %dx%d", w, h)
+	}
+}
+
+type fakeSizeCmd struct {
+	size string
+	rot  string
+}
+
+func (f *fakeSizeCmd) Shell(args ...string) (*adb.Result, error) {
+	if len(args) >= 2 && args[0] == "wm" && args[1] == "size" {
+		return &adb.Result{Stdout: f.size}, nil
+	}
+	return &adb.Result{Stdout: f.rot}, nil
+}
+func (f *fakeSizeCmd) ExecOut(args ...string) ([]byte, error) { return nil, nil }
+func (f *fakeSizeCmd) RawCommand(args ...string) (*adb.Result, error) {
+	return &adb.Result{}, nil
 }
 
 func TestScrollInBoundsOffCenter(t *testing.T) {

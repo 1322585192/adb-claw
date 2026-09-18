@@ -150,77 +150,28 @@ adb-claw open 'snssdk1128://search/result?keyword=遥控车&type=0'
 
 ```
 1. adb-claw app launch com.ss.android.ugc.aweme
-2. adb-claw wait --text "推荐" --timeout 5000    # 等待首页加载
-3. adb-claw scroll up                             # 切换下一个视频
-4. adb-claw scroll up --pages 3                   # 连续看 3 个视频
+2. adb-claw wait --changed --timeout 5000
+3. adb-claw scroll up
+4. adb-claw scroll up --pages 3
 ```
 
-### 获取当前视频信息
+### 读取当前视频信息
+
+看 JPEG：作者、描述、点赞/评论数都在画面右侧和底部。用 `--normalized` 点对应图标。
+
+### 打开直播间
 
 ```
-1. adb-claw tap {屏幕中心}     → 暂停视频（重要！否则 UI dump 会失败）
-2. sleep 1
-3. adb-claw ui tree             → 获取 UI 元素
-4. 查找：
-   - resource_id 含 "title" → 用户名（如 "@Rouoii."）
-   - resource_id 含 "desc" → 视频描述
-   - content_desc 含 "喜欢" → 点赞数
-   - content_desc 含 "评论" → 评论数
-   - content_desc 含 "收藏" → 收藏数
-   - content_desc 含 "分享" → 分享数
+1. adb-claw open 'snssdk1128://live?room_id={room_id}'
+2. adb-claw wait --changed --timeout 10000
+3. adb-claw observe --width 720
 ```
 
-### 监控直播间聊天
+弹幕和商品信息从截图读取，不要请求文本树。
 
-```
-1. adb-claw open 'snssdk1128://live?room_id={room_id}'   # 打开直播间
-2. adb-claw wait --text "说点什么" --timeout 10000         # 等待直播间加载
-3. adb-claw monitor --duration 30000 --interval 2000      # 持续读取 30 秒 UI 文本
-```
+### 直播间购物车
 
-直播间视频播放时 `ui tree` 会超时失败。`monitor` 命令通过 accessibility 框架直接读取文本，跳过视频表面节点，可在直播间正常工作。
-
-流式模式适合长时间监控：
-```
-adb-claw monitor --stream --duration 60000   # 60 秒流式输出，逐条 JSON line
-```
-
-### 录制直播间音频
-
-录制直播间音频（需要 Android 11+）：
-
-```
-1. adb-claw open 'snssdk1128://live?room_id={room_id}'   # 打开直播间
-2. adb-claw wait --text "说点什么" --timeout 10000         # 等待直播间加载
-3. adb-claw audio capture --file live_audio.wav --duration 60000  # 录制 60 秒
-```
-
-注意：录制期间设备扬声器会静音。结合 `monitor` 可同时获取弹幕文本和主播语音：
-
-```
-# 终端 1：采集音频
-adb-claw audio capture --file live_audio.wav --duration 60000
-
-# 终端 2：采集弹幕
-adb-claw monitor --stream --duration 60000
-```
-
-如果安装了 asrclaw，可实时转写主播语音：
-
-```
-adb-claw audio capture --stream --duration 60000 | asrclaw transcribe --stream --lang zh
-```
-
-### 抓取直播间购物车商品
-
-```
-1. 进入一个带货直播间
-2. adb-claw live cart                    # 抓取前 10 个商品 + 讲解中商品
-3. adb-claw live cart --count 20         # 抓取前 20 个商品
-```
-
-`live cart` 自动完成：读取讲解中商品 → 打开小黄车 → 滚动采集 → 关闭。
-输出结构化 JSON，包含商品编号、标题、价格、销量、标签。
+进入带货直播间后，看图点底部小黄车，再滚动采集商品卡片。已无独立购物车抓取命令。
 
 ### 清空搜索框并重新输入
 
@@ -235,34 +186,16 @@ adb-claw audio capture --stream --duration 60000 | asrclaw transcribe --stream -
 
 | 能力 | 命令 | 用途 | 状态 |
 |------|------|------|------|
-| 直播文本监控 | `adb-claw monitor` | 读取直播间弹幕和 UI 文本 | 内置 |
-| 小黄车抓取 | `adb-claw live cart` | 抓取直播间购物车商品数据 | 内置 |
-| 系统音频采集 | `adb-claw audio capture` | 录制直播间音频 | 内置（需 Android 11+） |
-| 语音识别 | `asrclaw transcribe` | 直播语音转文字 | 需另装 `claw install asr-claw` |
+| 看直播画面 | `adb-claw observe` / `frame.latest` | 弹幕和商品都在图里 | 内置 |
+| 系统音频采集 | `adb-claw audio capture` | 录制直播间音频（独立 CLI） | 需 Android 11+ |
 
 ## 已知问题
 
-### UI dump 在视频播放时失败
+### 视频页只需看图
 
-**现象**: `adb-claw ui tree` 或 `adb-claw observe` 返回 `UI_DUMP_FAILED`。
+v2 不再抓文本树。暂停不是必须的；直接 `observe` 并按画面点 `--normalized` 坐标。
 
-**原因**: 视频播放动画导致 uiautomator dump 超时。
-
-**解决**: 先 tap 屏幕中心暂停视频，等待 1 秒后再 dump。
-
-```bash
-adb-claw tap 540 1170    # Phone 屏幕中心（根据 device info 调整）
-sleep 1
-adb-claw ui tree
-```
-
-### UI dump 在搜索结果页失败
-
-**现象**: 搜索结果页执行 `adb-claw ui tree` 返回 `UI_DUMP_FAILED`。
-
-**原因**: 搜索结果页的视频预览卡片会自动播放，导致 uiautomator dump 超时。
-
-**解决**: 搜索结果页建议依赖截屏而非 UI 树。如必须 dump，可尝试快速向下滚动使视频预览离开可视区域后再 dump。
+搜索结果页同样看 JPEG，不要寻找节点定位器。
 
 ### 暂停视频可能打开评论面板
 

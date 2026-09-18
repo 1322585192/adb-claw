@@ -6,131 +6,126 @@ import (
 	"fmt"
 	"image"
 	"image/color"
-	"image/png"
+	"image/jpeg"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/llm-net/adb-claw/pkg/adb"
+	"github.com/llm-net/adb-claw/pkg/coord"
+	"github.com/llm-net/adb-claw/pkg/frame"
 )
 
-const sampleXML = `<?xml version="1.0" encoding="UTF-8"?>
-<hierarchy rotation="0">
-  <node index="0" text="Login" resource-id="com.example:id/btn_login" class="android.widget.Button" package="com.example" content-desc="" checkable="false" checked="false" clickable="true" enabled="true" focusable="true" focused="false" scrollable="false" selected="false" bounds="[200,500][880,600]"></node>
-</hierarchy>`
-
 type mockCmd struct {
-	png    []byte
 	taps   []string
 	shells [][]string
-	shellN int
-	execN  int
 }
 
-func (m *mockCmd) calls() [][]string { return m.shells }
-
 func (m *mockCmd) Shell(args ...string) (*adb.Result, error) {
-	m.shellN++
 	m.shells = append(m.shells, append([]string{}, args...))
-	if len(args) == 1 && strings.Contains(args[0], "uiautomator dump") {
-		return &adb.Result{Stdout: sampleXML}, nil
-	}
-	if len(args) >= 2 && args[0] == "sh" && args[1] == "-c" {
-		return &adb.Result{Stdout: sampleXML}, nil
-	}
 	if len(args) >= 1 && args[0] == "input" {
 		m.taps = append(m.taps, strings.Join(args, " "))
 		return &adb.Result{}, nil
 	}
+	if len(args) >= 1 && args[0] == "wm" {
+		return &adb.Result{Stdout: "Physical size: 1080x2340\n"}, nil
+	}
 	return &adb.Result{}, nil
 }
-
 func (m *mockCmd) ExecOut(args ...string) ([]byte, error) {
-	m.execN++
-	if len(args) >= 1 && args[0] == "screencap" {
-		return m.png, nil
-	}
-	return nil, fmt.Errorf("unexpected exec-out %v", args)
+	return nil, fmt.Errorf("unused")
 }
-
 func (m *mockCmd) RawCommand(args ...string) (*adb.Result, error) {
 	return &adb.Result{}, nil
 }
 
-func solidPNG(w, h int) []byte {
+func jpegFrame(seq uint32, w, h int, seed byte) *frame.Frame {
 	img := image.NewRGBA(image.Rect(0, 0, w, h))
 	for y := 0; y < h; y++ {
 		for x := 0; x < w; x++ {
-			img.Set(x, y, color.RGBA{R: 10, G: 20, B: 30, A: 255})
+			img.Set(x, y, color.RGBA{R: seed, A: 255})
 		}
 	}
 	var buf bytes.Buffer
-	if err := png.Encode(&buf, img); err != nil {
+	if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: 40}); err != nil {
 		panic(err)
 	}
-	return buf.Bytes()
+	jpegBytes := buf.Bytes()
+	now := time.Now()
+	return &frame.Frame{
+		Header: frame.Header{
+			Version:      frame.Version,
+			Seq:          seq,
+			CapturedAtMs: uint64(now.UnixMilli()),
+			DeviceWidth:  1080,
+			DeviceHeight: 2340,
+			ImageWidth:   uint16(w),
+			ImageHeight:  uint16(h),
+			JPEGLength:   uint32(len(jpegBytes)),
+		},
+		JPEG:       jpegBytes,
+		Hash:       frame.HashJPEG(jpegBytes),
+		ReceivedAt: now,
+		Source:     "test",
+	}
 }
 
-func TestServerObserveThenActUsesCache(t *testing.T) {
+func TestFrameLatestThenNormalizedAct(t *testing.T) {
 	t.Setenv("TMPDIR", t.TempDir())
-	cmd := &mockCmd{png: solidPNG(40, 60)}
-	in := bytes.NewBufferString(`{"id":1,"method":"observe","params":{"skip_screenshot":true}}
-{"id":2,"method":"act","params":{"action":"tap","index":0}}
+	cmd := &mockCmd{}
+	f := jpegFrame(4, 40, 80, 10)
+	srv := &Server{Cmd: cmd, Serial: "test", Options: Options{LatestPath: t.TempDir() + "/latest.jpg", MaxAge: time.Minute}}
+	srv.session.Put(f)
+
+	in := bytes.NewBufferString(`{"id":1,"method":"frame.latest"}
+{"id":2,"method":"act","params":{"action":"tap","frame_seq":4,"x":500,"y":500}}
 `)
 	var out bytes.Buffer
-	srv := &Server{Cmd: cmd, Serial: "test", In: in, Out: &out}
+	srv.In, srv.Out = in, &out
 	if err := srv.Run(); err != nil {
 		t.Fatal(err)
 	}
 
 	dec := json.NewDecoder(&out)
-	var observeResp Response
-	for {
-		if err := dec.Decode(&observeResp); err != nil {
-			t.Fatal(err)
-		}
-		if len(observeResp.ID) > 0 {
-			break
-		}
-	}
-	if observeResp.Error != nil {
-		t.Fatalf("observe error: %+v", observeResp.Error)
-	}
-	raw, _ := json.Marshal(observeResp.Result)
-	if !strings.Contains(string(raw), `"state_id"`) {
-		t.Fatalf("observe missing state_id: %s", raw)
-	}
-
-	var actResp Response
-	if err := dec.Decode(&actResp); err != nil {
+	var latest Response
+	if err := dec.Decode(&latest); err != nil {
 		t.Fatal(err)
 	}
-	if actResp.Error != nil {
-		t.Fatalf("act error: %+v", actResp.Error)
+	if latest.Error != nil {
+		t.Fatalf("latest: %+v", latest.Error)
 	}
-	dumps := 0
-	for _, c := range cmd.calls() {
-		if len(c) == 1 && strings.Contains(c[0], "uiautomator dump") {
-			dumps++
+	raw, _ := json.Marshal(latest.Result)
+	if !strings.Contains(string(raw), `"frame_seq"`) || strings.Contains(string(raw), "base64") {
+		t.Fatalf("latest result %s", raw)
+	}
+
+	var act Response
+	if err := dec.Decode(&act); err != nil {
+		t.Fatal(err)
+	}
+	if act.Error != nil {
+		t.Fatalf("act: %+v", act.Error)
+	}
+	want := coord.Denormalize(500, 500, 1080, 2340)
+	if len(cmd.taps) != 1 || !strings.Contains(cmd.taps[0], fmt.Sprintf("tap %d %d", want.X, want.Y)) {
+		t.Fatalf("normalized 500,500 on 1080x2340 should tap (%d,%d), got %v", want.X, want.Y, cmd.taps)
+	}
+	for _, sh := range cmd.shells {
+		joined := strings.Join(sh, " ")
+		if strings.Contains(joined, "uiautomator") {
+			t.Fatalf("act must not dump UI: %v", cmd.shells)
 		}
-		if len(c) >= 2 && c[0] == "sh" {
-			dumps++
-		}
-	}
-	if dumps != 1 {
-		t.Fatalf("expected 1 UI dump, got %d (shells=%d taps=%v)", dumps, cmd.shellN, cmd.taps)
-	}
-	if len(cmd.taps) != 1 || !strings.Contains(cmd.taps[0], "tap 540 550") {
-		t.Fatalf("tap args = %v", cmd.taps)
 	}
 }
 
-func TestServerActWithoutObserveIsStale(t *testing.T) {
+func TestActStaleUnknownSeq(t *testing.T) {
 	t.Setenv("TMPDIR", t.TempDir())
-	cmd := &mockCmd{png: solidPNG(10, 10)}
-	in := bytes.NewBufferString(`{"id":1,"method":"act","params":{"action":"tap","index":0}}
+	cmd := &mockCmd{}
+	srv := &Server{Cmd: cmd, Options: Options{LatestPath: t.TempDir() + "/l.jpg"}}
+	in := bytes.NewBufferString(`{"id":1,"method":"act","params":{"action":"tap","frame_seq":9,"x":1,"y":1}}
 `)
 	var out bytes.Buffer
-	srv := &Server{Cmd: cmd, Serial: "none", In: in, Out: &out}
+	srv.In, srv.Out = in, &out
 	if err := srv.Run(); err != nil {
 		t.Fatal(err)
 	}
@@ -138,18 +133,47 @@ func TestServerActWithoutObserveIsStale(t *testing.T) {
 	if err := json.NewDecoder(&out).Decode(&resp); err != nil {
 		t.Fatal(err)
 	}
-	if resp.Error == nil || resp.Error.Code != "STALE_STATE" {
-		t.Fatalf("expected STALE_STATE, got %+v", resp.Error)
+	if resp.Error == nil || resp.Error.Code != "STALE_FRAME" {
+		t.Fatalf("expected STALE_FRAME, got %+v", resp.Error)
 	}
 	if len(cmd.taps) != 0 {
-		t.Fatalf("should not tap on stale state: %v", cmd.taps)
+		t.Fatalf("should not tap: %v", cmd.taps)
 	}
 }
 
-func TestSessionRejectsWrongStateID(t *testing.T) {
+func TestActStaleWhenHashChanged(t *testing.T) {
+	cmd := &mockCmd{}
+	srv := &Server{Cmd: cmd, Options: Options{MaxAge: time.Minute}}
+	old := jpegFrame(1, 20, 20, 1)
+	srv.session.Put(old)
+	newer := jpegFrame(2, 20, 20, 90)
+	srv.session.Put(newer)
+
+	in := bytes.NewBufferString(`{"id":1,"method":"act","params":{"action":"tap","frame_seq":1,"x":10,"y":10}}
+`)
+	var out bytes.Buffer
+	srv.In, srv.Out = in, &out
+	if err := srv.Run(); err != nil {
+		t.Fatal(err)
+	}
+	var resp Response
+	if err := json.NewDecoder(&out).Decode(&resp); err != nil {
+		t.Fatal(err)
+	}
+	if resp.Error == nil || resp.Error.Code != "STALE_FRAME" {
+		t.Fatalf("expected STALE_FRAME on visual change, got %+v", resp.Error)
+	}
+}
+
+func TestSessionResolveSameHashAllowsNewerSeqGap(t *testing.T) {
 	var s Session
-	_, err := s.Get("abc", 0)
-	if err == nil {
-		t.Fatal("expected empty session error")
+	f1 := jpegFrame(1, 10, 10, 7)
+	s.Put(f1)
+	f2 := *f1
+	f2.Seq = 2
+	f2.Header.Seq = 2
+	s.Put(&f2)
+	if _, err := s.Resolve(1, time.Minute); err != nil {
+		t.Fatalf("same visual should be actionable: %v", err)
 	}
 }

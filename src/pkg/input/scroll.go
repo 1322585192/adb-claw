@@ -31,6 +31,42 @@ func GetScreenSize(cmd adb.Commander) (width, height int, err error) {
 	return 0, 0, fmt.Errorf("could not parse screen size from: %s", strings.TrimSpace(result.Stdout))
 }
 
+// CurrentScreenSize returns width/height in the current rotation.
+func CurrentScreenSize(cmd adb.Commander) (width, height int, err error) {
+	w, h, err := GetScreenSize(cmd)
+	if err != nil {
+		return 0, 0, err
+	}
+	rot := currentRotation(cmd)
+	if rot == 1 || rot == 3 {
+		return h, w, nil
+	}
+	return w, h, nil
+}
+
+func currentRotation(cmd adb.Commander) int {
+	result, err := cmd.Shell("dumpsys", "window", "displays")
+	if err != nil {
+		return 0
+	}
+	for _, line := range strings.Split(result.Stdout, "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.Contains(line, "mCurrentRotation=") {
+			continue
+		}
+		for _, word := range strings.Fields(line) {
+			if strings.HasPrefix(word, "mCurrentRotation=") {
+				val := strings.TrimPrefix(word, "mCurrentRotation=")
+				val = strings.TrimRight(val, ",")
+				if r, err := strconv.Atoi(val); err == nil {
+					return r & 3
+				}
+			}
+		}
+	}
+	return 0
+}
+
 // ScrollDirection calculates swipe coordinates for a scroll direction.
 // Returns (x1, y1, x2, y2) for the swipe.
 func ScrollDirection(screenW, screenH, distance int, direction string) (x1, y1, x2, y2 int, err error) {

@@ -1,35 +1,35 @@
 # ADB Claw Runtime Rules
 
-Use this page during a live control loop. Load the main Skill only for setup, troubleshooting, or rare commands.
+Use this page during a Gemini 3.8 Flash control loop. Perception is a JPEG file only.
 
 ## Fast loop
 
-1. `adb-claw observe --width 540 --quality 50 --ui-mode realtime`
-2. Read `data.screenshot.path`. Use `data.ui.elements[].center` or `--index` from this snapshot.
-3. `adb-claw tap <center.x> <center.y>` or `adb-claw tap --index N`
-4. Re-observe only after navigation or a `STALE_STATE` error.
+1. `frame.latest` (or `adb-claw observe --width 720 --quality 60`)
+2. Read `path`. Do not paste JSON. Do not look for UI text nodes.
+3. `act` with that `frame_seq` and 0–999 coordinates (`adb-claw tap --normalized X Y`)
+4. `frame.wait_after` until the image hash changes (or timeout returns the latest frame)
+5. If `STALE_FRAME`, get a new frame before acting again
 
-Do not paste observe JSON into notes. Do not tap screenshot-image pixels. `bounds` / `center` are device pixels.
+## Defaults for Gemini 3.8 Flash
+
+- Model: `gemini-3.8-flash`
+- `thinking_level=low`
+- Inline JPEG from the file at `path`
+- `media_resolution=medium` (upgrade to `high` only for a dense small-text page)
+- Coordinates: Gemini Computer Use 0–999 grid, never preview-image pixels
 
 ## Do not do this
 
-- `tap --index` without a recent observe — it will fail with `STALE_STATE` instead of dumping again
-- `tap --refresh` on every click
-- observe after every tap when the page did not change
-- `wait --text` plus extra observe polling for the same condition
+- Ask for a UI tree, element index, resource-id, or on-screen text node
+- Sleep a fixed number of milliseconds after a tap
+- Tap using JPEG pixel coordinates
+- Put image bytes or base64 into the tool JSON
 
 ## Persistent session
 
-For Flash/Live adapters:
-
 ```text
-adb-claw serve --stdio --ui-mode realtime --capture auto --width 540
+adb-claw serve --stdio --width 720
 ```
 
-Methods: `observe` → `act {state_id, action, index|handle|x,y}`. A mismatched `state_id` returns `STALE_STATE`.
-
-## Capture modes
-
-- `auto`: `pull` on TCP/SSH ADB (`host:port`), `stream` on USB
-- `pull`: device PNG + `adb pull` (faster on remote tunnels)
-- `stream`: `adb exec-out screencap -p`
+Methods: `frame.latest` → `act {frame_seq, action, x, y}` → `frame.wait_after`.
+Frames start at 720p/q60 and may drop to 540p/q50 for the rest of the session.

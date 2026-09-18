@@ -1,6 +1,10 @@
 package cmd
 
 import (
+	"crypto/sha1"
+	"encoding/hex"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -9,9 +13,8 @@ import (
 )
 
 var (
-	waitText     string
-	waitID       string
 	waitActivity string
+	waitChanged  bool
 	waitGone     bool
 	waitTimeout  int
 	waitInterval int
@@ -19,35 +22,39 @@ var (
 
 var waitCmd = &cobra.Command{
 	Use:   "wait",
-	Short: "Wait for a UI element or activity to appear/disappear",
-	Long: `Wait for a condition to be met on the device screen.
+	Short: "Wait for an activity or a visual screen change",
+	Long: `Wait for a condition on the device.
 Examples:
-  adb-claw wait --text "Login"                 # Wait for text to appear
-  adb-claw wait --id "btn_submit"              # Wait for element by ID
-  adb-claw wait --text "Loading" --gone        # Wait for text to disappear
-  adb-claw wait --activity ".MainActivity"     # Wait for activity
-  adb-claw wait --text "Done" --timeout 20000  # Custom timeout (20s)`,
+  adb-claw wait --activity .MainActivity
+  adb-claw wait --changed
+  adb-claw wait --activity .Splash --gone`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		start := time.Now()
-
-		if waitText == "" && waitID == "" && waitActivity == "" {
+		if waitActivity == "" && !waitChanged {
 			writer.Fail("wait", "MISSING_ARGS",
-				"Specify --text, --id, or --activity",
-				"Example: adb-claw wait --text \"Login\"", start)
+				"Specify --activity or --changed",
+				"Example: adb-claw wait --changed", start)
 			return nil
 		}
 
 		timeout := time.Duration(waitTimeout) * time.Millisecond
 		interval := time.Duration(waitInterval) * time.Millisecond
-
 		deadline := time.Now().Add(timeout)
 		attempts := 0
 
+		var baseline string
+		if waitChanged {
+			var err error
+			baseline, err = screenHash()
+			if err != nil {
+				writer.Fail("wait", "SCREENSHOT_FAILED", err.Error(), "", start)
+				return nil
+			}
+		}
+
 		for time.Now().Before(deadline) {
 			attempts++
-
 			if waitActivity != "" {
-				// Activity mode: check dumpsys window
 				found, activity, err := checkActivity(waitActivity)
 				if err != nil {
 					writer.Verbose("activity check error (attempt %d): %v", attempts, err)
@@ -68,69 +75,32 @@ Examples:
 					}, start)
 					return nil
 				}
-			} else {
-				// Text/ID mode: check UI tree
-				tree, err := observe.DumpUITree(client)
+			}
+			if waitChanged {
+				h, err := screenHash()
 				if err != nil {
-					writer.Verbose("ui dump error (attempt %d): %v", attempts, err)
-				} else {
-					var found bool
-					var matchedElement map[string]interface{}
-
-					if waitText != "" {
-						results := tree.FindByText(waitText)
-						if len(results) > 0 {
-							found = true
-							matchedElement = elementInfo(&results[0])
-						}
-					} else if waitID != "" {
-						results := tree.FindByID(waitID)
-						if len(results) > 0 {
-							found = true
-							matchedElement = elementInfo(&results[0])
-						}
-					}
-
-					if found && !waitGone {
-						data := map[string]interface{}{
-							"condition": "element",
-							"gone":      false,
-							"attempts":  attempts,
-						}
-						if matchedElement != nil {
-							data["element"] = matchedElement
-						}
-						writer.Success("wait", data, start)
-						return nil
-					} else if !found && waitGone {
-						data := map[string]interface{}{
-							"condition": "element",
-							"gone":      true,
-							"attempts":  attempts,
-						}
-						if waitText != "" {
-							data["text"] = waitText
-						}
-						if waitID != "" {
-							data["id"] = waitID
-						}
-						writer.Success("wait", data, start)
-						return nil
-					}
+					writer.Verbose("hash error (attempt %d): %v", attempts, err)
+				} else if h != baseline {
+					writer.Success("wait", map[string]interface{}{
+						"condition": "changed",
+						"attempts":  attempts,
+					}, start)
+					return nil
 				}
 			}
-
 			time.Sleep(interval)
 		}
 
-		// Timeout
-		condition := "element"
-		if waitActivity != "" {
-			condition = "activity"
+		condition := "activity"
+		if waitChanged && waitActivity == "" {
+			condition = "screen"
 		}
 		action := "appear"
 		if waitGone {
 			action = "disappear"
+		}
+		if waitChanged && waitActivity == "" {
+			action = "change"
 		}
 		writer.Fail("wait", "WAIT_TIMEOUT",
 			condition+" did not "+action+" within "+timeout.String(),
@@ -140,31 +110,42 @@ Examples:
 }
 
 func init() {
-	waitCmd.Flags().StringVar(&waitText, "text", "", "Wait for element with this text")
-	waitCmd.Flags().StringVar(&waitID, "id", "", "Wait for element with this resource-id")
-	waitCmd.Flags().StringVar(&waitActivity, "activity", "", "Wait for this activity to be in foreground")
-	waitCmd.Flags().BoolVar(&waitGone, "gone", false, "Wait for element/activity to disappear")
+	waitCmd.Flags().StringVar(&waitActivity, "activity", "", "Wait for this activity to be in the foreground")
+	waitCmd.Flags().BoolVar(&waitChanged, "changed", false, "Wait until the screenshot hash changes")
+	waitCmd.Flags().BoolVar(&waitGone, "gone", false, "Wait for the activity to disappear")
 	waitCmd.Flags().IntVar(&waitTimeout, "timeout", 10000, "Timeout in milliseconds")
-	waitCmd.Flags().IntVar(&waitInterval, "interval", 800, "Poll interval in milliseconds")
-
+	waitCmd.Flags().IntVar(&waitInterval, "interval", 250, "Poll interval in milliseconds")
 	rootCmd.AddCommand(waitCmd)
 }
 
-// checkActivity checks if the given activity is currently in the foreground.
 func checkActivity(activity string) (bool, string, error) {
 	result, err := client.Shell("dumpsys", "window", "displays")
 	if err != nil {
 		return false, "", err
 	}
-
 	for _, line := range strings.Split(result.Stdout, "\n") {
 		line = strings.TrimSpace(line)
 		if strings.Contains(line, "mCurrentFocus") || strings.Contains(line, "mFocusedWindow") || strings.Contains(line, "mFocusedApp") {
 			if strings.Contains(line, activity) {
-				windowName := extractWindowName(line)
-				return true, windowName, nil
+				return true, extractWindowName(line), nil
 			}
 		}
 	}
 	return false, "", nil
+}
+
+func screenHash() (string, error) {
+	path := filepath.Join(os.TempDir(), "adb-claw-wait.jpg")
+	res, err := observe.CaptureScreenshot(client, observe.CaptureOptions{
+		MaxWidth: 360,
+		Format:   "jpeg",
+		Quality:  40,
+		Path:     path,
+		Mode:     observe.CaptureModeAuto,
+	})
+	if err != nil {
+		return "", err
+	}
+	sum := sha1.Sum(res.Bytes)
+	return hex.EncodeToString(sum[:8]), nil
 }

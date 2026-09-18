@@ -180,34 +180,21 @@ adb-claw open "xhsdiscover://search/result?keyword=${keyword}&type=51"
 sleep 3    # 等待结果加载
 
 # 2. 默认是综合 Tab，需要看用户时切到「用户」Tab
-adb-claw tap --text "用户"
+adb-claw observe --width 720
+# 看图点「用户」Tab：adb-claw tap --normalized X Y
 sleep 2
 
-# 3. 收集帖子信息
-adb-claw ui tree | python3 -c "
-import json,sys; data=json.load(sys.stdin)
-for e in data['data']['elements']:
-    d=e.get('content_desc','')
-    if ('笔记' in d or '视频' in d) and '来自' in d: print(d[:120])
-"
+# 3. 收集帖子信息：读 JPEG，不要抓节点树
+adb-claw observe --width 720
 ```
 
 ### 批量翻页收集帖子（作者+点赞数）
 
 ```bash
-# 快速滚动 + 提取 text（过滤噪音词）
 for i in 1 2 3 4 5; do
   adb-claw scroll down
-  sleep 0.8
-  adb-claw ui tree 2>/dev/null | python3 -c "
-import json, sys
-data = json.load(sys.stdin)
-for e in data['data']['elements']:
-    t = e.get('text','').strip()
-    if t and len(t)<80 and not any(x in t for x in ['搜索','全部','用户','商品','图片','地点','问一问','综合','最新','可购买','相关','大家都在']):
-        print(t)
-"
-  echo "---"
+  adb-claw wait --changed --timeout 1500
+  adb-claw observe --width 720
 done
 ```
 
@@ -228,7 +215,7 @@ sleep 3
 ### 读取用户主页核心数据
 
 ```bash
-adb-claw ui tree 2>/dev/null | python3 -c "
+adb-claw observe --width 720  # read the JPEG; python node scraping removed "
 import json, sys
 data = json.load(sys.stdin)
 for e in data['data']['elements']:
@@ -255,7 +242,7 @@ sleep 2
 adb-claw tap --text "营养品"
 sleep 2
 # 提取产品名和销量
-adb-claw ui tree 2>/dev/null | python3 -c "
+adb-claw observe --width 720  # read the JPEG; python node scraping removed "
 import json, sys
 data = json.load(sys.stdin)
 for e in data['data']['elements']:
@@ -271,7 +258,7 @@ adb-claw scroll down && sleep 1
 ```bash
 for i in 1 2 3; do
   adb-claw scroll down && sleep 0.8
-  adb-claw ui tree 2>/dev/null | python3 -c "
+  adb-claw observe --width 720  # read the JPEG; python node scraping removed "
 import json, sys
 data = json.load(sys.stdin)
 for e in data['data']['elements']:
@@ -285,7 +272,7 @@ done
 
 ```bash
 # 在个人主页帖子瀑布流中，先定位帖子 bounds
-adb-claw ui tree 2>/dev/null | python3 -c "
+adb-claw observe --width 720  # read the JPEG; python node scraping removed "
 import json, sys
 data = json.load(sys.stdin)
 for e in data['data']['elements']:
@@ -298,7 +285,7 @@ for e in data['data']['elements']:
 adb-claw tap 806 1695
 sleep 3
 # 读取正文
-adb-claw ui tree 2>/dev/null | python3 -c "
+adb-claw observe --width 720  # read the JPEG; python node scraping removed "
 import json, sys
 data = json.load(sys.stdin)
 for e in data['data']['elements']:
@@ -431,11 +418,11 @@ cy = (b['top'] + b['bottom']) // 2
 | 能力 | 方法 | 适用场景 |
 |------|------|---------|
 | 搜索内容/用户 | 深度链接 `xhsdiscover://search/result?keyword={encoded}&type=51` | 中文搜索唯一可靠方式 |
-| 读取用户主页数据 | `ui tree` + 过滤 content_desc | 粉丝数、获赞数、认证标签 |
-| 批量收集帖子作者+点赞 | 滚动 + 过滤 content_desc 含"笔记/来自" | KOL 筛选 |
-| 读取橱窗产品 | tap 橱窗 → 滚动 + 过滤含"·"或"已售" | 品牌合作分析 |
-| 读取帖子正文 | 进帖后 `ui tree` 的 text 字段 | 内容/产品分析 |
-| 读取评论区作者回复 | 滚动到评论区 + `ui tree` | 找到作者推荐的具体产品 |
+| 读取用户主页数据 | `observe` 看图 | 粉丝数、获赞数、认证标签 |
+| 批量收集帖子作者+点赞 | 滚动 + `observe` | KOL 筛选 |
+| 读取橱窗产品 | tap 橱窗 → 滚动 + 看图 | 品牌合作分析 |
+| 读取帖子正文 | 进帖后看 JPEG | 内容/产品分析 |
+| 读取评论区作者回复 | 滚动到评论区 + 看图 | 找到作者推荐的具体产品 |
 
 ---
 

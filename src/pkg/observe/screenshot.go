@@ -18,7 +18,10 @@ import (
 )
 
 // DefaultJPEGQuality is the default JPEG encoding quality (1-100).
-const DefaultJPEGQuality = 70
+const DefaultJPEGQuality = 60
+
+// DefaultObserveWidth is the default preview width for observe/serve frames.
+const DefaultObserveWidth = 720
 
 // DefaultObserveFileName is the temp file used when observe does not get --file.
 const DefaultObserveFileName = "adb-claw-observe"
@@ -37,8 +40,9 @@ type CaptureOptions struct {
 	Profile  bool        // include segmented timing
 }
 
-// ScreenshotResult holds screenshot metadata. Coordinates for tapping live in the UI tree
-// (device pixels). ImageWidth/Height describe the encoded preview only.
+// ScreenshotResult holds screenshot metadata. ImageWidth/Height describe the
+// encoded preview. DeviceWidth/Height are the live screen pixels used to map
+// the 0–999 normalized action grid.
 type ScreenshotResult struct {
 	Format       string         `json:"format"`
 	Path         string         `json:"path"`
@@ -53,17 +57,14 @@ type ScreenshotResult struct {
 	Bytes        []byte         `json:"-"`
 }
 
-// ObserveOptions controls a combined observe call.
+// ObserveOptions controls a screenshot-only observe call.
 type ObserveOptions struct {
-	MaxWidth   int
-	Format     string
-	Quality    int
-	Path       string
-	Mode       CaptureMode
-	UIMode     UIMode
-	Compressed bool
-	Profile    bool
-	SkipImage  bool
+	MaxWidth int
+	Format   string
+	Quality  int
+	Path     string
+	Mode     CaptureMode
+	Profile  bool
 }
 
 func imageExt(format string) string {

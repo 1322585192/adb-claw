@@ -70,11 +70,11 @@ adb-claw open 'imeituan://www.meituan.com/search?q=火锅'
 美团新安装后首次启动会连续弹出多个弹窗，必须按顺序处理：
 
 ```
-1. 隐私协议        → tap --id "permission_agree_btn"（同意）
+1. 隐私协议        → observe 后点「同意」
 2. 红包弹窗        → key BACK
-3. 定位服务引导     → tap --text "快速开启定位" 或关闭
-4. 系统定位权限     → tap --text "仅在使用中允许"
-5. 抽奖/优惠券弹窗  → tap --id "btn_left"（残忍离开）或 key BACK
+3. 定位服务引导     → 看图点「快速开启定位」或关闭
+4. 系统定位权限     → 看图点「仅在使用中允许」
+5. 抽奖/优惠券弹窗  → 看图点「残忍离开」或 key BACK
 6. 登录引导        → tap 左上角 X 关闭
 ```
 
@@ -133,7 +133,7 @@ adb-claw open 'imeituan://www.meituan.com/search?q=火锅'
 
 **菜单页说明**：
 - 左侧为分类导航（必点招牌/收藏福利/超值双拼/多人套餐 等），右侧为菜品列表
-- 分类名称可通过 `monitor` 获取（格式如 `🐷｜必点👍｜招牌`）
+- 分类名称从截图左侧导航读取（格式如 `🐷｜必点👍｜招牌`）
 - 底部购物车栏显示总价、起送差额、满减提示
 - 有"必选品"时（如打包费），按钮显示"未点必选品"，需先选择才能结算
 - "外送"/"自取"可在顶部切换
@@ -220,16 +220,15 @@ adb-claw key ENTER
 ```bash
 # 方式 1: 搜索特定餐厅（推荐，支持中文）
 adb-claw open 'imeituan://www.meituan.com/search?q=肯德基'
-# → 进入 SearchResultActivity，monitor 可读取餐厅列表
-# → 截屏确认餐厅位置，scroll down 后 tap x=540, y≈400-600 进入餐厅
+# → 进入 SearchResultActivity，截屏读取餐厅列表
+# → 截屏确认餐厅位置，scroll down 后 tap --normalized 进入餐厅
 
 # 方式 2: 进入外卖频道浏览附近餐厅
 adb-claw open 'imeituan://www.meituan.com/waimai'
 # 外卖首页分类图标下方是餐厅列表，需先滚动
 adb-claw scroll down           # 滚一页后餐厅卡片进入视野
-adb-claw screenshot            # 截屏确认当前视野
-adb-claw monitor --duration 2000  # 读取餐厅名字确认内容
-adb-claw tap 540 500           # 点击餐厅卡片（y≈400-600 视情况）
+adb-claw observe --width 720   # 截屏确认当前视野和餐厅名
+adb-claw tap --normalized 500 400
 
 # 方式 3: 按分类浏览
 # 外卖首页的分类宫格（甜品饮品/小吃/汉堡披萨/火锅 等）
@@ -282,17 +281,16 @@ adb-claw open 'imeituan://www.meituan.com/waimai'
 ### 查看底部各 Tab
 
 ```bash
-adb-claw tap --text "视频"      # 视频 Tab
-adb-claw tap --text "购物车"    # 购物车 Tab
-adb-claw tap --text "我的"      # 个人中心
+# 底部 Tab 从左到右：首页 / 视频 / 消息 / 购物车 / 我的
+# 看图后 tap --normalized，不要用已删除的文本定位器
 ```
 
 ### 关闭营销弹窗（通用策略）
 
 ```bash
-# 策略 1: 通过 UI tree 找关闭按钮
-adb-claw ui tree   # 查找 text 含"关闭"/"残忍离开"/"取消"/"以后再说" 的元素
-adb-claw tap --text "残忍离开"
+# 策略 1: 看截图找关闭/"残忍离开"/"取消"/"以后再说"，用 --normalized 点
+adb-claw observe --width 720
+adb-claw tap --normalized 500 700
 
 # 策略 2: 按返回键
 adb-claw key BACK
@@ -304,17 +302,16 @@ adb-claw key BACK
 
 ## 已知问题
 
-### 大量页面为 WebView，UI tree 返回 0 元素
+### 外卖页是 WebView / RN
 
-**现象**: `adb-claw ui tree` 在**外卖所有页面**（TakeoutActivity、WMRestaurantActivity、WMMPActivity）全部返回 `UI_DUMP_FAILED`（0 元素）。仅美团主首页（MainActivity）的原生元素可正常获取。
+**现象**: 外卖相关页面没有可靠的原生节点可抓。
 
-**原因**: 美团外卖广泛使用 React Native + WebView 混合架构，uiautomator dump 无法穿透 RN/WebView 层。
+**原因**: 美团外卖广泛使用 React Native + WebView 混合架构。
 
 **解决**:
-1. 用 `monitor` 获取页面文字（accessibility 框架，所有页面均可用）
-2. 优先使用深度链接跳转，减少坐标点击操作
-3. 导航和交互依赖截屏 + 估算坐标点击
-4. **切勿使用 `tap --text` 或 `tap --id`**（UI tree 失败时这些命令也无效）
+1. 用 `observe` 看图决策
+2. 优先使用深度链接跳转
+3. 用 `--normalized` 点击，不要使用已删除的文本定位器
 
 ### 频繁操作触发验证码
 
