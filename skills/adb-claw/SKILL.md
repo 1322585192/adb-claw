@@ -64,6 +64,35 @@ Your eyes and hands on Android. See the current frame, act with a 0–999 coordi
 
 This skill is built for **Gemini 3.8 Flash Computer Use**. The only visual input is a JPEG file. There is no UI tree, element index, resource-id, or text-node locator.
 
+## Hard rule: never insert a sleep
+
+Do **not** pause, delay, or sleep between adb-claw commands. This includes:
+
+- `sleep 1` / `sleep 2` / `sleep 0.5`
+- `time.sleep(...)`
+- `adb-claw shell sleep ...` or `adb shell sleep ...`
+- “wait 1 second”, “pause briefly”, “give the UI time to settle”
+- padding a `wait --timeout` without `--changed` or `--activity` just to burn time
+
+After `tap` / `swipe` / `scroll` / `open` / `key`, issue the next command immediately:
+
+- need a new picture → `observe` or `frame.latest` right away
+- need the pixels to change first → `wait --changed` or `frame.wait_after` (returns as soon as the hash changes; do not add a sleep before or after)
+- need a specific activity → `wait --activity NAME`
+
+`long-press --duration` is the press gesture, not a pause between commands. Do not invent extra waits “to be safe”.
+
+```bash
+# WRONG — never do this
+adb-claw tap --normalized 500 500
+sleep 2
+adb-claw observe
+
+# RIGHT — act, then see or wait for a change
+adb-claw tap --normalized 500 500
+adb-claw observe --width 720
+```
+
 ## Why ADB Claw
 
 - **Image-only observe** — `observe` / `frame.latest` writes a JPEG. JSON never includes image bytes or base64.
@@ -148,8 +177,8 @@ adb-claw observe --width 720 --quality 60
 # 2. Act on the 0-999 grid (center of the screen)
 adb-claw tap --normalized 500 500
 
-# 3. Wait for the pixels to change instead of sleeping
-adb-claw wait --changed --timeout 2000
+# 3. Next command immediately — no sleep in between
+adb-claw observe --width 720 --quality 60
 ```
 
 `observe` writes a JPEG to `data.screenshot.path`. **Read that file.** Do not paste the JSON into notes.
@@ -232,10 +261,12 @@ For CJK/emoji, use `open` with a deep link.
 
 ```bash
 adb-claw open https://www.google.com
+adb-claw wait --changed --timeout 3000    # returns early; do not sleep first
 adb-claw scroll down --pages 2
-adb-claw wait --changed --timeout 3000
 adb-claw wait --activity .MainActivity
 ```
+
+`--timeout` is a deadline, not a sleep. Never run `wait` without `--changed` or `--activity`.
 
 ### serve — Persistent JSONL Session
 
@@ -281,10 +312,14 @@ adb-claw doctor
 1. adb-claw observe --width 720 --quality 60
 2. Read data.screenshot.path
 3. adb-claw tap --normalized X Y
-4. adb-claw wait --changed   # or serve frame.wait_after
+4. adb-claw observe --width 720     # immediately; no sleep
+   # NEVER: sleep / shell sleep / "wait 1s" between 3 and 4
+   # only if you need the pixels to change first: wait --changed / frame.wait_after
 ```
 
 For a long-lived adapter use `adb-claw serve --stdio`.
+
+If the next step is already `observe` / `frame.latest`, skip `wait` — do not sleep and do not wait just to create a gap.
 
 ## Error Recovery
 
