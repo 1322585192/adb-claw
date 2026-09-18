@@ -1,8 +1,51 @@
 package input
 
 import (
+	"crypto/md5"
+	"encoding/base64"
+	"fmt"
+	"strings"
 	"testing"
+
+	"github.com/llm-net/adb-claw/pkg/adb"
 )
+
+type typeMock struct {
+	shells [][]string
+	pushes [][]string
+	fail   string
+}
+
+func (m *typeMock) Shell(args ...string) (*adb.Result, error) {
+	copied := append([]string{}, args...)
+	m.shells = append(m.shells, copied)
+	joined := strings.Join(args, " ")
+	switch {
+	case len(args) > 0 && args[0] == "md5sum":
+		return &adb.Result{Stdout: fmt.Sprintf("%x  %s\n", md5.Sum(inputDEX), inputDEXPath)}, nil
+	case strings.Contains(joined, "ADBClawInput"):
+		if m.fail == "helper" {
+			return &adb.Result{Stderr: "clipboard denied", ExitCode: 1}, nil
+		}
+		return &adb.Result{Stdout: "OK\n"}, nil
+	case joined == "input keyevent KEYCODE_PASTE":
+		if m.fail == "paste" {
+			return &adb.Result{Stderr: "paste failed", ExitCode: 1}, nil
+		}
+		return &adb.Result{}, nil
+	default:
+		return &adb.Result{}, nil
+	}
+}
+
+func (m *typeMock) ExecOut(args ...string) ([]byte, error) {
+	return nil, fmt.Errorf("unexpected ExecOut: %v", args)
+}
+
+func (m *typeMock) RawCommand(args ...string) (*adb.Result, error) {
+	m.pushes = append(m.pushes, append([]string{}, args...))
+	return &adb.Result{}, nil
+}
 
 func TestEscapeForInput(t *testing.T) {
 	tests := []struct {
@@ -55,5 +98,62 @@ func TestResolveKeycode(t *testing.T) {
 		if got != tt.want {
 			t.Errorf("resolveKeycode(%q) = %q, want %q", tt.input, got, tt.want)
 		}
+	}
+}
+
+func TestTypeTextASCIIUsesADBInput(t *testing.T) {
+	cmd := &typeMock{}
+	method, err := TypeText(cmd, "hello world")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if method != TypeMethodADBInput {
+		t.Fatalf("method = %q, want %q", method, TypeMethodADBInput)
+	}
+	if len(cmd.shells) != 1 || strings.Join(cmd.shells[0], " ") != "input text hello%sworld" {
+		t.Fatalf("shell calls = %v", cmd.shells)
+	}
+}
+
+func TestTypeTextUnicodeUsesEmbeddedClipboardHelper(t *testing.T) {
+	cmd := &typeMock{}
+	text := "王者荣耀"
+	method, err := TypeText(cmd, text)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if method != TypeMethodUnicodeClipboard {
+		t.Fatalf("method = %q, want %q", method, TypeMethodUnicodeClipboard)
+	}
+	if len(cmd.pushes) != 0 {
+		t.Fatalf("matching embedded DEX should not be pushed: %v", cmd.pushes)
+	}
+	if len(cmd.shells) != 3 {
+		t.Fatalf("shell calls = %v", cmd.shells)
+	}
+	helper := cmd.shells[1]
+	if got := helper[len(helper)-1]; got != base64.StdEncoding.EncodeToString([]byte(text)) {
+		t.Fatalf("helper payload = %q", got)
+	}
+	if got := strings.Join(cmd.shells[2], " "); got != "input keyevent KEYCODE_PASTE" {
+		t.Fatalf("paste call = %q", got)
+	}
+}
+
+func TestTypeTextUnicodeFailureForbidsIMEWorkaround(t *testing.T) {
+	cmd := &typeMock{fail: "helper"}
+	_, err := TypeText(cmd, "中文")
+	if err == nil {
+		t.Fatal("expected Unicode helper failure")
+	}
+	message := err.Error()
+	if !strings.Contains(message, "do not install an IME") {
+		t.Fatalf("error must close the third-party IME escape route: %q", message)
+	}
+}
+
+func TestEmbeddedInputDEX(t *testing.T) {
+	if len(inputDEX) < 4 || string(inputDEX[:4]) != "dex\n" {
+		t.Fatalf("embedded input DEX has invalid magic")
 	}
 }

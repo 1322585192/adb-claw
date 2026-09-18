@@ -3,10 +3,10 @@
   "version": "2.0.0",
   "description": "Android device control CLI for Gemini 3.8 Flash Computer Use. Perception is a JPEG frame only. Actions use a 0-999 normalized coordinate grid.",
   "capabilities": {
-    "input_methods": ["adb_input"],
+    "input_methods": ["adb_input", "unicode_clipboard"],
     "stealth_levels": ["off"],
     "humanize": false,
-    "unicode_input": false,
+    "unicode_input": true,
     "persistent_session": true,
     "image_only": true,
     "normalized_coords": true
@@ -45,9 +45,9 @@
     },
     {
       "name": "type",
-      "description": "Type ASCII text into the focused field.",
+      "description": "Type text into the focused field. Unicode uses an embedded app_process clipboard helper; no APK or IME change.",
       "usage": "adb-claw type TEXT",
-      "when_to_use": "After clicking an input field to focus it."
+      "when_to_use": "After clicking an editable field to focus it. Prefer a known deep link when it avoids UI steps."
     },
     {
       "name": "key",
@@ -96,9 +96,12 @@
     "image_only": "The only perception input is a JPEG file from observe or frame.latest. Do not request a UI tree.",
     "normalized_coords": "All model actions use a 1000x1000 (0-999) grid. adb-claw maps them onto the frame's device_width/device_height.",
     "stale_frame": "STALE_FRAME means the screen changed or the frame aged out. Call frame.latest again before acting.",
-    "no_sleep": "Never insert sleep, time.sleep, adb-claw shell sleep, or a timed pause between commands. After tap/swipe/open/key, immediately observe or frame.latest. Skip wait if the next step is already a new frame.",
-    "wait_after": "Use frame.wait_after or wait --changed only when you need the pixels to change before deciding. They return as soon as the image hash changes. Do not sleep before or after. Do not call wait just to create a gap.",
+    "no_sleep": "Never insert sleep, time.sleep, adb-claw shell sleep, or a timed pause between commands. After tap/swipe/open/key/type, immediately observe or frame.latest.",
+    "wait_after": "One-shot CLI: observe immediately after an action; only wait --changed if that frame is visibly transitional. Serve: frame.wait_after already returns a JPEG path, so never follow it with frame.latest.",
+    "unicode": "Focus the field and call type. Unicode uses adb-claw's embedded app_process clipboard helper. Never install ADBKeyboard, change IME, or call the raw clipboard service.",
+    "forbidden_shell": "Never use shell for UI hierarchy extraction, layout/accessibility dumpsys, clipboard service calls, or IME changes. Use JPEG perception, app current, and type.",
+    "retry_policy": "Empty/error/placeholder screens are valid outcomes. On the same screen, do not tap the same normalized point more than twice; never switch to raw pixels or node inspection.",
     "media": "Adapter default: gemini-3.8-flash, thinking_level=low, media_resolution=medium, inline JPEG. Upgrade to high only for dense small text.",
-    "cjk": "type is ASCII only. Use open with a deep link for Chinese/Japanese/Korean."
+    "cjk": "Prefer a known deep link to reduce steps; otherwise focus the field and use built-in Unicode type."
   }
 }

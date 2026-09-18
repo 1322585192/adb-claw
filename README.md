@@ -27,7 +27,8 @@ adb-claw audio capture --stream | asrclaw transcribe --stream --lang zh
 
 - **Structured JSON output** — Every command returns `{ok, command, data, error, duration_ms, timestamp}` with actionable `suggestion` on errors.
 - **Normalized targeting** — Skill tools use `--normalized` so 720/540/rotation cannot shift the hit point. CLI still accepts device pixels.
-- **Deep link navigation** — `open` bypasses CJK text input limits via URI intents.
+- **Built-in Unicode input** — `type "中文"` uses an embedded app_process helper; no APK or IME change.
+- **Deep link navigation** — `open` skips unnecessary UI steps when an app exposes a URI.
 - **Smart scroll** — Auto-calculates swipe coordinates from the current screen size.
 - **Wait for change** — Block until the screenshot hash changes or an activity appears.
 - **Full device control** — Screen, apps, shell, files.
@@ -158,11 +159,11 @@ adb-claw
 # JPEG frame (always start here)
 adb-claw observe --width 720 --quality 60
 
-# Model path: 0-999 grid. CLI also accepts device pixels.
+# Model path: always use the 0-999 grid.
 adb-claw tap --normalized 500 500
-adb-claw tap 540 960
 
 adb-claw type "hello world"
+adb-claw type "王者荣耀"
 adb-claw key ENTER
 adb-claw clear-field
 adb-claw type "new text"
@@ -174,7 +175,7 @@ adb-claw type "new text"
 # Smart scroll (auto-calculates coordinates)
 adb-claw scroll down
 adb-claw scroll up --pages 3
-# Open deep links (key for CJK text — bypasses input text limits)
+# Open deep links when they reduce UI steps
 adb-claw open "snssdk1128://search/result?keyword=猫咪"
 adb-claw open "https://www.google.com"
 
@@ -252,7 +253,7 @@ adb-claw tap 100 200 -o quiet  # Errors only
 
 ## App Profiles
 
-App Profiles are pre-built knowledge bases for specific apps — deep links, UI layouts, device-specific behavior, and known issues. They let agents skip the trial-and-error exploration phase.
+App Profiles are pre-built knowledge bases for specific apps — deep links, visual landmarks, device-specific behavior, and known issues. They let agents skip trial-and-error exploration.
 
 Available profiles in `skills/apps/`:
 
@@ -274,8 +275,8 @@ Contributions welcome — see `skills/apps/README.md` for the profile spec.
 1. **Observe first** — Always `observe` / `frame.latest` before deciding. Read the JPEG path; do not paste JSON
 2. **Normalized taps** — Skill tools use `--normalized` 0–999. Never tap JPEG pixels
 3. **Scroll, don't swipe** — `scroll down` over manual swipe math
-4. **Never sleep** — after an action, `observe` immediately. Use `wait --changed` / `frame.wait_after` only when you need the pixels to change first
-5. **Deep link for CJK** — `open 'app://search?keyword=中文'` instead of `type`
+4. **Never sleep** — after an action, `observe` immediately. Wait only after a visibly transitional frame
+5. **Unicode is built in** — focus the field and `type "中文"`; prefer deep links when they reduce steps
 6. **Clear before type** — `clear-field` then `type`
 7. **Check App Profiles** — Load profile before exploring unfamiliar apps
 8. **Error recovery** — `STALE_FRAME` means get a new frame, then act again

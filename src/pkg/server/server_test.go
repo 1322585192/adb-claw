@@ -23,6 +23,9 @@ type mockCmd struct {
 
 func (m *mockCmd) Shell(args ...string) (*adb.Result, error) {
 	m.shells = append(m.shells, append([]string{}, args...))
+	if strings.Contains(strings.Join(args, " "), "ADBClawInput") {
+		return &adb.Result{Stdout: "OK\n"}, nil
+	}
 	if len(args) >= 1 && args[0] == "input" {
 		m.taps = append(m.taps, strings.Join(args, " "))
 		return &adb.Result{}, nil
@@ -175,5 +178,71 @@ func TestSessionResolveSameHashAllowsNewerSeqGap(t *testing.T) {
 	s.Put(&f2)
 	if _, err := s.Resolve(1, time.Minute); err != nil {
 		t.Fatalf("same visual should be actionable: %v", err)
+	}
+}
+
+func TestFrameWaitAfterReturnsReadablePathWithoutLatest(t *testing.T) {
+	t.Setenv("TMPDIR", t.TempDir())
+	f := jpegFrame(4, 40, 80, 10)
+	srv := &Server{
+		Cmd:     &mockCmd{},
+		Options: Options{LatestPath: t.TempDir() + "/latest.jpg"},
+	}
+	srv.session.Put(f)
+	srv.In = bytes.NewBufferString(
+		`{"id":1,"method":"frame.wait_after","params":{"frame_seq":4,"timeout_ms":1}}` + "\n",
+	)
+	var out bytes.Buffer
+	srv.Out = &out
+	if err := srv.Run(); err != nil {
+		t.Fatal(err)
+	}
+
+	var response Response
+	if err := json.NewDecoder(&out).Decode(&response); err != nil {
+		t.Fatal(err)
+	}
+	if response.Error != nil {
+		t.Fatalf("wait_after: %+v", response.Error)
+	}
+	result, ok := response.Result.(map[string]interface{})
+	if !ok {
+		t.Fatalf("result type = %T", response.Result)
+	}
+	if result["path"] == "" || result["next"] != "read_path_directly" {
+		t.Fatalf("wait_after result must be directly consumable: %#v", result)
+	}
+	if changed, ok := result["changed"].(bool); !ok || changed {
+		t.Fatalf("same frame should report changed=false: %#v", result)
+	}
+}
+
+func TestActTypesUnicodeWithBuiltInHelper(t *testing.T) {
+	cmd := &mockCmd{}
+	srv := &Server{Cmd: cmd}
+	srv.In = bytes.NewBufferString(
+		`{"id":1,"method":"act","params":{"action":"type","text":"王者荣耀"}}` + "\n",
+	)
+	var out bytes.Buffer
+	srv.Out = &out
+	if err := srv.Run(); err != nil {
+		t.Fatal(err)
+	}
+
+	var response Response
+	if err := json.NewDecoder(&out).Decode(&response); err != nil {
+		t.Fatal(err)
+	}
+	if response.Error != nil {
+		t.Fatalf("Unicode type: %+v", response.Error)
+	}
+	raw, _ := json.Marshal(response.Result)
+	if !strings.Contains(string(raw), `"method":"unicode_clipboard"`) {
+		t.Fatalf("response must expose Unicode transport: %s", raw)
+	}
+	joined := fmt.Sprint(cmd.shells)
+	if !strings.Contains(joined, "ADBClawInput") ||
+		!strings.Contains(joined, "KEYCODE_PASTE") {
+		t.Fatalf("missing helper/paste calls: %v", cmd.shells)
 	}
 }

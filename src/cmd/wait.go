@@ -64,6 +64,7 @@ Examples:
 						"activity":  activity,
 						"gone":      false,
 						"attempts":  attempts,
+						"next":      "observe_once",
 					}, start)
 					return nil
 				} else if !found && waitGone {
@@ -72,6 +73,7 @@ Examples:
 						"activity":  waitActivity,
 						"gone":      true,
 						"attempts":  attempts,
+						"next":      "observe_once",
 					}, start)
 					return nil
 				}
@@ -84,6 +86,7 @@ Examples:
 					writer.Success("wait", map[string]interface{}{
 						"condition": "changed",
 						"attempts":  attempts,
+						"next":      "observe_once",
 					}, start)
 					return nil
 				}
@@ -104,7 +107,7 @@ Examples:
 		}
 		writer.Fail("wait", "WAIT_TIMEOUT",
 			condition+" did not "+action+" within "+timeout.String(),
-			"Try increasing --timeout or check the condition", start)
+			"Observe the current screen now; increase timeout only when the JPEG is visibly still loading", start)
 		return nil
 	},
 }

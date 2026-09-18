@@ -7,7 +7,7 @@ Use this page during a Gemini 3.8 Flash control loop. Perception is a JPEG file 
 1. `frame.latest` (or `adb-claw observe --width 720 --quality 60`)
 2. Read `path`. Do not paste JSON. Do not look for UI text nodes.
 3. `act` with that `frame_seq` and 0–999 coordinates (`adb-claw tap --normalized X Y`)
-4. Next command immediately — no `sleep`. Use `frame.wait_after` only if you must wait for the pixels to change. If the next step is already `frame.latest` / `observe`, skip the wait.
+4. Read the next frame immediately — no `sleep`. In serve, use `frame.wait_after` only if the image must change before deciding; it returns the JPEG path, so do not follow it with `frame.latest`.
 5. If `STALE_FRAME`, get a new frame before acting again
 
 ## Defaults for Gemini 3.8 Flash
@@ -25,8 +25,22 @@ Use this page during a Gemini 3.8 Flash control loop. Perception is a JPEG file 
 - Tap using JPEG pixel coordinates
 - Put image bytes or base64 into the tool JSON
 - Call `wait` with only `--timeout` to fake a sleep
+- Run `uiautomator`, layout/accessibility `dumpsys`, raw clipboard service calls, or IME-changing shell commands
+- Download/install ADBKeyboard or another helper APK; `adb-claw type` already handles Unicode
+- Use host `curl`, `find`, Python, or another tool to build a device-control workaround
 
 After an action, the next command is `observe` / `frame.latest`, or `wait --changed` / `frame.wait_after` / `wait --activity`. Those waits return early. Do not add a sleep before or after them.
+
+## Wait decision
+
+- One-shot CLI: action → `observe`. If that JPEG is visibly old/loading and cannot be used, then `wait --changed` → one `observe`.
+- Serve: `act` → `frame.latest`, or `frame.wait_after` when change is required. Read the returned path directly.
+- Empty results and error/placeholder pages are real outcomes. Do not wait or tap repeatedly to make them disappear.
+- On the same visual hash, do not tap the same point more than twice. Never switch to raw pixels.
+
+## Text input
+
+Focus the field, then call `adb-claw type TEXT`. ASCII uses `adb shell input text`; Unicode uses adb-claw's embedded app_process clipboard helper. It installs no APK and does not change the active IME. On failure, keep focus and retry once.
 
 ## Persistent session
 

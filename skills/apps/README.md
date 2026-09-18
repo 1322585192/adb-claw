@@ -43,3 +43,7 @@ Agent 操作某个 App 前，按包名匹配对应的 Profile 文件：
 2. 深度链接需验证可用
 3. 标注 Phone / Pad 差异（如果有条件测试）
 4. 禁止写 `sleep` / `time.sleep` / 固定秒数间隔。动作后立刻 `observe`，或 `wait --changed` / `wait --activity`（有画面变化才返回）
+5. 禁止把 `wait --changed` 和 `observe` 写成无条件固定组合；先 `observe`，只有画面仍在切换且无法决策时才等待
+6. 所有 Agent 点击必须使用 `--normalized`，不得记录或复用设备像素
+7. 禁止使用 Python、curl、jq、节点 JSON、resource-id、content-desc 或已删除的文本定位器
+8. 中文输入直接使用 `adb-claw type`，不得安装第三方输入法或修改 IME
