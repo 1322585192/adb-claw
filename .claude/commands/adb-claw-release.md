@@ -45,7 +45,9 @@ website/src/i18n/zh.js:
 
 检查以下文件是否需要更新（如有未提交的功能变更）：
 
-- `skills/adb-claw/SKILL.md` — 命令文档、Getting Started、Troubleshooting
+- `skills/adb-claw/SKILL.md` — 决策循环、硬规则、命令索引
+- `skills/adb-claw/RUNTIME.md` — Gemini / serve 适配器短规则
+- `skills/adb-claw/COMMANDS.md` — 完整 flag 与非循环命令
 - `README.md` — 与 SKILL.md 对齐（Features、命令树、Usage、Architecture、App Profiles 表）
 - `CLAUDE.md` — 命令树、项目结构
 - `skills/apps/*.md` — App Profile 变更

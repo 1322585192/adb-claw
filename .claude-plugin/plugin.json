@@ -1,7 +1,7 @@
 {
   "name": "adb-claw",
   "version": "1.6.1",
-  "description": "Android device control CLI for AI agent automation. Tap, swipe, scroll, type, screenshot, UI inspection, deep links, wait for UI state, screen management, app lifecycle, shell commands, and file transfer — all via ADB.",
+  "description": "Android device control CLI for AI agent automation. Observe a JPEG frame, then tap/swipe/type on a 0-999 grid. Deep links, screen/app management, shell, and file transfer via ADB. No UI tree.",
   "author": {
     "name": "llm-net",
     "url": "https://github.com/llm-net"

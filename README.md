@@ -87,7 +87,7 @@ adb-claw doctor    # verify setup
 
 ## Use as AI Skill
 
-adb-claw is published as an AI Skill on two platforms, sharing the same Skill definition (`skills/adb-claw/SKILL.md`).
+adb-claw is published as an AI Skill on two platforms, sharing the same Skill definition (`skills/adb-claw/SKILL.md`). Gemini adapters read `RUNTIME.md`; full flags are in `COMMANDS.md`.
 
 ### Claude Code
 
@@ -261,6 +261,7 @@ Available profiles in `skills/apps/`:
 | App | File | Content |
 |-----|------|---------|
 | Douyin (抖音) | `douyin.md` | Search/user/live deep links, feed/search/profile visual landmarks, Phone vs Pad differences |
+| Xiaohongshu (小红书) | `xiaohongshu.md` | Search deep links, feed/search/note visual landmarks |
 | Meituan (美团) | `meituan.md` | Search/waimai deep links, homepage/menu/search layouts, WebView workarounds, popup chain handling |
 
 Usage:
@@ -273,14 +274,15 @@ Contributions welcome — see `skills/apps/README.md` for the profile spec.
 
 ## Agent Workflow
 
-1. **Observe first** — Always `observe` / `frame.latest` before deciding. Read the JPEG path; do not paste JSON
-2. **Normalized taps** — Skill tools use `--normalized` 0–999. Never tap JPEG pixels
+1. **Open the JPEG** — `observe` (or a `--wait-changed` result) returns `data.screenshot.path`. Look at that image before every tap.
+2. **Normalized taps** — `--normalized` 0–999 plus that frame's token. After `--wait-changed`, the next token is `data.screenshot.frame_token`.
 3. **Scroll, don't swipe** — `scroll down` over manual swipe math
-4. **Never sleep** — after an action, `observe` immediately. Wait only after a visibly transitional frame
+4. **Never sleep** — bind `--wait-changed` on the action; do not `sleep` then `observe`
 5. **Unicode is built in** — focus the field and `type "中文"`; prefer deep links when they reduce steps
 6. **Clear before type** — `clear-field` then `type`
-7. **Check App Profiles** — Load profile before exploring unfamiliar apps
-8. **Error recovery** — `STALE_FRAME` means get a new frame, then act again
+7. **Check App Profiles** — `app current`, then load `skills/apps/` before exploring
+8. **Stop** — goal screen, or login/captcha/payment/permission dialogs the user must answer
+9. **Error recovery** — `STALE_FRAME` means `observe` again. Same `hash + point` at most twice.
 
 ## Actively Shipping
 

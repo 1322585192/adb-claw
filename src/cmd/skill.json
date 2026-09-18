@@ -1,7 +1,7 @@
 {
   "name": "adb-claw",
   "version": "2.0.0",
-  "description": "Android device control CLI for Gemini 3.8 Flash Computer Use. Perception is a JPEG frame only. Actions use a 0-999 normalized coordinate grid.",
+  "description": "Android device control CLI. Perception is a JPEG frame only. Actions use a 0-999 normalized grid bound to frame_token. Use when controlling, testing, or automating a connected Android device.",
   "capabilities": {
     "input_methods": ["adb_input", "unicode_set_text"],
     "stealth_levels": ["off"],
@@ -11,99 +11,165 @@
     "image_only": true,
     "normalized_coords": true
   },
-  "model": {
-    "name": "gemini-3.8-flash",
+  "adapter": {
+    "when": "Long-lived Gemini Computer Use adapters only. Claude Code and OpenClaw use the one-shot CLI.",
+    "model": "gemini-3.8-flash",
     "thinking_level": "low",
     "media_resolution": "medium",
-    "image": "inline JPEG from frame path, never base64 in tool JSON"
+    "image": "inline JPEG from frame path, never base64 in tool JSON",
+    "session": "adb-claw serve --stdio"
   },
   "tools": [
     {
-      "name": "take_screenshot",
+      "name": "observe",
       "description": "Copy the newest livestream JPEG to a unique path and frame token. Never looks at UI text nodes.",
-      "usage": "adb-claw observe --quality 60   OR serve frame.latest",
-      "returns": "unique path, frame_token, hash, captured_at, rotation, action/image size, optional frame_age_ms",
-      "when_to_use": "Before deciding an action. Read the returned path and retain its frame_token. Do not sleep; the pump already holds the latest frame."
+      "usage": "adb-claw observe",
+      "returns": "data.screenshot.path, data.screenshot.frame_token, hash, captured_at, rotation, action/image size, optional frame_age_ms",
+      "when_to_use": "Before deciding an action, and after type/key/open. Open the JPEG. Do not sleep; the pump already holds the latest frame."
     },
     {
-      "name": "click",
-      "description": "Tap using Gemini Computer Use 0-999 coordinates.",
-      "usage": "adb-claw tap --normalized X Y --frame FRAME_TOKEN [--wait-changed 1500]   OR serve act {action:tap, frame_seq, x, y}",
-      "when_to_use": "After reading the latest frame. The one-shot CLI requires its frame_token."
+      "name": "tap",
+      "description": "Tap using a 0-999 grid bound to the latest frame token.",
+      "usage": "adb-claw tap --normalized X Y --frame FRAME_TOKEN [--wait-changed 1500]",
+      "when_to_use": "After reading the latest JPEG. Next token is data.screenshot.frame_token, not top-level data.frame_token."
     },
     {
-      "name": "long_press",
+      "name": "long-press",
       "description": "Long press using 0-999 coordinates.",
-      "usage": "adb-claw long-press --normalized X Y --frame FRAME_TOKEN [--duration 1000]",
+      "usage": "adb-claw long-press --normalized X Y --frame FRAME_TOKEN [--duration 1000] [--wait-changed 1500]",
       "when_to_use": "For context menus or press-and-hold controls."
     },
     {
+      "name": "swipe",
+      "description": "Swipe between two 0-999 points on the current frame.",
+      "usage": "adb-claw swipe --normalized X1 Y1 X2 Y2 --frame FRAME_TOKEN [--wait-changed 1500]",
+      "when_to_use": "Custom gesture path. Prefer scroll for paging lists."
+    },
+    {
       "name": "scroll",
-      "description": "Scroll the screen. Prefer direction pages; swipe also accepts 0-999 endpoints.",
-      "usage": "adb-claw scroll {up|down|left|right} --frame FRAME_TOKEN [--pages N]   OR adb-claw swipe --normalized X1 Y1 X2 Y2 --frame FRAME_TOKEN",
+      "description": "Scroll the screen by direction pages.",
+      "usage": "adb-claw scroll {up|down|left|right} --frame FRAME_TOKEN [--pages N] [--wait-changed 1500]",
       "when_to_use": "To reveal more content after reading the current frame."
     },
     {
       "name": "type",
-      "description": "Type text into the focused field. Unicode uses embedded app_process ACTION_SET_TEXT; no APK or IME change.",
+      "description": "Type text into the focused field. Unicode uses embedded ACTION_SET_TEXT; no APK or IME change.",
       "usage": "adb-claw type TEXT",
-      "when_to_use": "After clicking an editable field to focus it. Prefer a known deep link when it avoids UI steps."
+      "when_to_use": "After tapping an editable field to focus it. Prefer a known deep link when it avoids UI steps."
+    },
+    {
+      "name": "clear-field",
+      "description": "Clear the currently focused editable field.",
+      "usage": "adb-claw clear-field",
+      "when_to_use": "Before retyping into a focused field."
     },
     {
       "name": "key",
       "description": "Press a system key.",
-      "usage": "adb-claw key {HOME|BACK|ENTER|TAB|DEL|POWER|VOLUME_UP|VOLUME_DOWN}",
-      "when_to_use": "Back, home, confirm, or device keys."
+      "usage": "adb-claw key {HOME|BACK|ENTER|DEL|APP_SWITCH|PASTE|COPY|CUT|WAKEUP}",
+      "when_to_use": "Back, home, confirm, recents, paste, or device keys."
     },
     {
-      "name": "open_app",
-      "description": "Launch an app or open a deep link / URL.",
-      "usage": "adb-claw app launch PACKAGE   OR adb-claw open URI",
-      "when_to_use": "To jump to an app or pass CJK text as a URL parameter."
-    },
-    {
-      "name": "serve",
-      "description": "Persistent JSONL session: frame.latest / frame.wait_after / act / device.info.",
-      "usage": "adb-claw serve --stdio",
-      "when_to_use": "Gemini 3.8 Flash adapters. Image bytes stay on disk; JSON only has path + frame_seq."
+      "name": "open",
+      "description": "Open a URL or app deep link.",
+      "usage": "adb-claw open URI",
+      "when_to_use": "To jump to a screen or pass CJK text as a URL parameter."
     },
     {
       "name": "wait",
       "description": "Wait for an activity or a visual screen change. No text locators.",
       "usage": "adb-claw wait {--activity NAME | --changed --after-frame FRAME_TOKEN} [--timeout ms]",
-      "when_to_use": "When an action ran without integrated --wait-changed. A changed wait returns a new JPEG path."
+      "when_to_use": "When an action ran without --wait-changed. A changed wait returns data.screenshot.path."
+    },
+    {
+      "name": "app",
+      "description": "App lifecycle and current package.",
+      "usage": "adb-claw app current|list|launch PACKAGE|stop PACKAGE",
+      "when_to_use": "Load an App Profile, confirm navigation, or launch/stop a package."
+    },
+    {
+      "name": "screen",
+      "description": "Screen power, unlock, and rotation.",
+      "usage": "adb-claw screen status|on|off|unlock",
+      "when_to_use": "When the screen is off or locked."
+    },
+    {
+      "name": "device",
+      "description": "List devices or read model, screen size, Android version.",
+      "usage": "adb-claw device list|info",
+      "when_to_use": "First session, or when choosing -s SERIAL / Phone vs Pad."
+    },
+    {
+      "name": "doctor",
+      "description": "Check adb, device, and stream health.",
+      "usage": "adb-claw doctor",
+      "when_to_use": "First request or when a command reports no device."
+    },
+    {
+      "name": "audio",
+      "description": "Capture system audio as WAV. Not part of the visual decision loop.",
+      "usage": "adb-claw audio capture [--file path] [--duration ms] [--stream]",
+      "when_to_use": "Only when the user asks to record or hear device audio. Android 11+."
+    },
+    {
+      "name": "file",
+      "description": "Push or pull files.",
+      "usage": "adb-claw file push LOCAL REMOTE | file pull REMOTE LOCAL",
+      "when_to_use": "When the user asked to transfer files."
+    },
+    {
+      "name": "shell",
+      "description": "Run a non-UI adb shell command. Rejects hierarchy dumps, layout dumpsys, clipboard binder, and IME changes.",
+      "usage": "adb-claw shell COMMAND",
+      "when_to_use": "When the user asked for a shell fact (getprop, pm). Never as a vision escape hatch."
+    },
+    {
+      "name": "screenshot",
+      "description": "Save a picture for a human. Not the observe token loop.",
+      "usage": "adb-claw screenshot [-f path]",
+      "when_to_use": "Only when the user wants a saved image file. Do not use it to decide taps."
+    },
+    {
+      "name": "serve",
+      "description": "Persistent JSONL session: frame.latest / frame.wait_after / act / device.info.",
+      "usage": "adb-claw serve --stdio",
+      "when_to_use": "Gemini adapters only. Claude Code and OpenClaw must not start this."
+    },
+    {
+      "name": "pump",
+      "description": "Explicit livestream control. First observe starts the pump automatically.",
+      "usage": "adb-claw pump [--daemon] | pump status | pump stop",
+      "when_to_use": "Only when doctor says the stream is down."
     },
     {
       "name": "bench",
       "description": "Measure first frame, screenshot, latest write, and normalized tap latency.",
       "usage": "adb-claw bench [--rounds 5] [--width px]",
-      "when_to_use": "To collect a repeatable image-only latency baseline."
-    },
-    {
-      "name": "app_current",
-      "description": "Get the currently focused app and activity.",
-      "usage": "adb-claw app current",
-      "when_to_use": "To load an App Profile or confirm navigation."
-    },
-    {
-      "name": "device_info",
-      "description": "Get device details: model, screen size, Android version.",
-      "usage": "adb-claw device info",
-      "when_to_use": "At the start of a session."
+      "when_to_use": "Diagnostics only. Not part of the control loop."
     }
   ],
+  "app_profiles": [
+    {"file": "douyin.md", "app": "Douyin", "package": "com.ss.android.ugc.aweme"},
+    {"file": "xiaohongshu.md", "app": "Xiaohongshu", "package": "com.xingin.xhs"},
+    {"file": "meituan.md", "app": "Meituan", "package": "com.sankuai.meituan"}
+  ],
   "workflow_hints": {
+    "default_loop": "observe → open JPEG → tap/swipe/scroll --normalized --frame TOKEN --wait-changed → open data.screenshot.path. type/key/open then observe.",
+    "read_image": "JSON is only metadata. Open data.screenshot.path before every coordinate action.",
+    "next_token": "After --wait-changed, the next token is data.screenshot.frame_token. Top-level data.frame_token is the frame just acted on.",
     "image_only": "The only perception input is a JPEG file from observe or frame.latest. Do not request a UI tree.",
-    "normalized_coords": "All model actions use a 1000x1000 (0-999) grid plus the latest frame_token. Bare pixels and unbound normalized actions are rejected.",
-    "stale_frame": "STALE_FRAME means the frame action size no longer matches the live screen, or the token expired. Observe again. Do not treat rotation 0 vs 1 as stale when the JPEG is already the current width x height.",
+    "normalized_coords": "All model actions use a 1000x1000 (0-999) grid plus the latest frame_token. Tap the control center, not 500 500 unless that is the target. Bare pixels and unbound normalized actions are rejected.",
+    "stale_frame": "STALE_FRAME means the frame action size no longer matches the live screen, or the token expired. Observe again.",
     "no_sleep": "Never insert sleep, time.sleep, adb-claw shell sleep, or a timed pause. Use an action's --wait-changed or wait --changed --after-frame.",
-    "wait_after": "One-shot CLI: an action with --wait-changed returns the next unique JPEG path. Without it, use wait --changed --after-frame. Serve uses frame.wait_after.",
-    "unicode": "Focus the field and call type. Unicode uses adb-claw's embedded app_process ACTION_SET_TEXT helper. Never install ADBKeyboard, change IME, or call the raw clipboard service.",
-    "forbidden_shell": "Never use shell for UI hierarchy extraction, layout/accessibility dumpsys, clipboard service calls, or IME changes. Use JPEG perception, app current, and type.",
-    "retry_policy": "Empty/error/placeholder screens are valid outcomes. Retry the same hash plus normalized point at most once; never switch to --raw, pull, a fixed path, or node inspection.",
-    "usb_capture": "A physical USB device uses auto/stream. A background pump keeps only the newest JPEG; observe copies it. Unique frame paths prevent adapter image caching; do not switch to pull for that symptom.",
+    "wait_after": "One-shot CLI: an action with --wait-changed returns data.screenshot. Without it, use wait --changed --after-frame. Serve uses frame.wait_after.",
+    "changed_false": "changed:false still includes the latest JPEG. Treat it as current state. Do not raise --timeout to fake a sleep. Video feeds can flip changed:true without a useful UI change.",
+    "unicode": "Focus the field and call type. Never install ADBKeyboard, change IME, or call the raw clipboard service.",
+    "forbidden_shell": "Never use shell for UI hierarchy extraction, layout/accessibility dumpsys, clipboard service calls, or IME changes.",
+    "stop_policy": "Stop on the goal screen. Stop and ask on login, captcha, payment, or a permission dialog the user must answer. Same hash+point at most twice. Two no-progress frames → change strategy or ask.",
+    "retry_policy": "Empty/error/placeholder screens are valid outcomes. Never switch to --raw, pull, a fixed path, or node inspection.",
+    "out_of_loop": "screenshot, audio, serve, pump, bench are not the visual decision loop.",
+    "usb_capture": "A physical USB device uses auto/stream. Unique frame paths prevent adapter image caching; do not switch to pull for that symptom.",
     "live_stream": "observe reads the latest pump frame. Do not restart capture, insert sleep, or treat a static hash as a stale stream.",
-    "media": "Adapter default: gemini-3.8-flash, thinking_level=low, media_resolution=medium, inline JPEG. Upgrade to high only for dense small text.",
     "cjk": "Prefer a known deep link to reduce steps; otherwise focus the field and use built-in Unicode type."
   }
 }

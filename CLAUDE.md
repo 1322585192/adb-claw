@@ -22,11 +22,14 @@ helper/                      # 设备端 Java 辅助程序源码
 ├── ADBClawAudio.java        # 系统音频采集 DEX
 └── ADBClawInput.java        # Unicode ACTION_SET_TEXT DEX（不安装 APK/IME）
 skills/
-├── adb-claw/SKILL.md        # Skill 定义（两个平台共用）
-├── adb-claw/RUNTIME.md      # Flash 实时循环短规则
+├── adb-claw/SKILL.md        # Skill 定义（两个平台共用）：决策循环
+├── adb-claw/RUNTIME.md      # Gemini Flash / serve 适配器短规则
+├── adb-claw/COMMANDS.md     # 完整 flag 与非循环命令（按需读）
 └── apps/                    # App Profile 知识库（运行时按需加载）
     ├── README.md
-    └── douyin.md
+    ├── douyin.md
+    ├── xiaohongshu.md
+    └── meituan.md
 ```
 
 ### App Profile
@@ -154,7 +157,7 @@ adb-claw audio capture --stream | asrclaw transcribe --stream --lang zh
 ## 开发工作流
 
 - 编码完成后运行 `cd src && make test && make build`
-- 更新 SKILL.md / RUNTIME.md / CLAUDE.md 命令树
+- 更新 SKILL.md / RUNTIME.md / COMMANDS.md / CLAUDE.md 命令树
 - DEX 无法构建时必须走截图回退，不能引入文本树
 
 ## 发布流程

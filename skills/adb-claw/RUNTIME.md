@@ -1,54 +1,54 @@
-# ADB Claw Runtime Rules
+# ADB Claw Runtime — Gemini adapter
 
-Use this page during a Gemini 3.8 Flash control loop. Perception is a JPEG file only.
+Use this page only for a long-lived **Gemini 3.8 Flash** adapter that speaks `adb-claw serve --stdio`. Claude Code and OpenClaw stay on the one-shot CLI in [SKILL.md](SKILL.md).
 
-## Fast loop
+Perception is a JPEG file. Do not put image bytes or base64 in tool JSON.
 
-1. `adb-claw observe --quality 60` — reads the newest livestream frame (a background pump stays up; do not recapture or sleep)
-2. Read its unique `screenshot.path` and keep `frame_token`. Do not paste JSON or reuse an older path.
-3. Act with that token and 0–999 coordinates: `adb-claw tap --normalized X Y --frame FRAME_TOKEN --wait-changed 1500`.
-4. Read the returned `screenshot.path` directly. It has a new token for the next action; never add `sleep`.
-5. If `STALE_FRAME`, observe again. A token is invalid when its action width/height no longer match the live screen (true rotate). A pump frame that is already landscape is still valid if dumpsys says rotation 1 and the sidecar says 0.
-
-## Defaults for Gemini 3.8 Flash
+## Adapter defaults
 
 - Model: `gemini-3.8-flash`
 - `thinking_level=low`
 - Inline JPEG from the file at `path`
-- `media_resolution=medium` (upgrade to `high` only for a dense small-text page)
+- `media_resolution=medium` (one turn at `high` only for dense small text)
 - Coordinates: Gemini Computer Use 0–999 grid, never preview-image pixels
-- Capture on a USB device: `auto` selects `stream`; the pump keeps the latest JPEG. Do not switch to pull to troubleshoot a stale fixed path
+- USB capture: `auto` selects `stream`. The pump keeps the latest JPEG. Do not switch to `pull` because a reused path looks stale — every frame path is unique.
 
-## Do not do this
-
-- Insert any delay between commands: `sleep`, `time.sleep`, `adb-claw shell sleep`, `adb shell sleep`, “wait 1 second”, “pause briefly”
-- Ask for a UI tree, element index, resource-id, or on-screen text node
-- Tap using JPEG pixel coordinates
-- Reuse a fixed path such as `adb-claw-observe.jpg`; every frame path is unique
-- Put image bytes or base64 into the tool JSON
-- Call `wait` with only `--timeout` to fake a sleep
-- Run `uiautomator`, layout/accessibility `dumpsys`, raw clipboard service calls, or IME-changing shell commands
-- Download/install ADBKeyboard or another helper APK; `adb-claw type` already handles Unicode
-- Use host `curl`, `find`, Python, or another tool to build a device-control workaround
-
-After a frame-bound action, read its returned changed frame. If the action ran without `--wait-changed`, use `wait --changed --after-frame FRAME_TOKEN`; that wait returns the JPEG path directly.
-
-## Wait decision
-
-- One-shot CLI: `observe` → action with `--frame`; use `--wait-changed` when the action should visibly change the screen.
-- Serve: `act` → `frame.latest`, or `frame.wait_after` when change is required. Read the returned path directly.
-- Empty results and error/placeholder pages are real outcomes. Do not wait or tap repeatedly to make them disappear.
-- On the same visual hash, do not tap the same point more than twice. Never switch to raw pixels.
-
-## Text input
-
-Focus the field with a frame-bound tap, then call `adb-claw type TEXT`. ASCII uses `adb shell input text`; Unicode uses the embedded app_process `ACTION_SET_TEXT` helper. It installs no APK and does not change the active IME. On failure, keep focus and retry once.
-
-## Persistent session
+## Serve loop
 
 ```text
 adb-claw serve --stdio
 ```
 
-Methods: `frame.latest` → `act {frame_seq, action, x, y}` → `frame.wait_after`.
-Frames keep the device's native aspect (quality 60) and may drop to a 540px-wide uniform scale if they are stale.
+Methods: `ping`, `frame.latest`, `frame.wait_after`, `act`, `device.info`, `close`.
+
+1. `frame.latest` — writes a unique JPEG; JSON has `path`, `frame_seq`, `frame_age_ms`, rotation, sizes, scale.
+2. Read that JPEG. Act with `act {frame_seq, action, x, y}` on the 0–999 grid.
+3. When the next picture is required, `frame.wait_after` and read its `path` directly. Do not call `frame.latest` just to duplicate it.
+4. `STALE_FRAME` → `frame.latest` again. The seq is invalid when that frame's action width/height no longer match the live screen (true rotate). A landscape JPEG is still valid when its action size matches the live screen.
+
+Frames start at the device's native aspect (quality 60) and may drop to a 540px-wide uniform scale if they are stale. The session does not auto-upgrade.
+
+One-shot equivalent (no serve): `observe` → `tap --normalized X Y --frame TOKEN --wait-changed 1500` → read `data.screenshot.path`. Same stop/retry rules as [SKILL.md](SKILL.md).
+
+## Do not do this
+
+- Insert any delay: `sleep`, `time.sleep`, `adb-claw shell sleep`, `adb shell sleep`, “wait 1 second”, “pause briefly”
+- Ask for a UI tree, element index, resource-id, or on-screen text node
+- Tap JPEG pixel coordinates or reuse a fixed path such as `adb-claw-observe.jpg`
+- Call `wait` with only `--timeout` to fake a sleep
+- Run `uiautomator`, layout/accessibility `dumpsys`, raw clipboard service calls, or IME-changing shell
+- Download/install ADBKeyboard or another helper APK; `adb-claw type` handles Unicode
+- Use host `curl`, `find`, Python, or another tool as a device-control workaround
+- Treat `changed: true` on a video/live feed as proof a tap worked — judge the new JPEG
+
+## Wait and retry
+
+- Serve: `act` then `frame.wait_after` when a new picture is required.
+- One-shot: `--wait-changed` on the action, or `wait --changed --after-frame TOKEN`.
+- Empty results and error/placeholder pages are real outcomes.
+- Same visual hash: do not tap the same point more than twice. Never switch to raw pixels.
+- Login, captcha, payment, or a permission dialog the user must answer → stop and ask.
+
+## Text input
+
+Focus the field with a frame-bound tap, then `adb-claw type TEXT`. ASCII uses `adb shell input text`; Unicode uses the embedded `ACTION_SET_TEXT` helper. No APK, no IME change. On failure, keep focus and retry once.
