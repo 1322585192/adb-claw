@@ -188,22 +188,22 @@ If `doctor` reports no device, ask the user to:
 
 ## Quick Start
 
-The core loop is **observe → decide → act → observe**:
+The core loop is **observe → act → observe-only-if-changed**. Read `RUNTIME.md` for the short realtime rules.
 
 ```bash
-# 1. See what's on screen (JPEG file + UI tree; JSON never includes image bytes)
-adb-claw observe
+# 1. See what's on screen (JPEG file + versioned UI snapshot)
+adb-claw observe --width 540 --quality 50 --ui-mode realtime
 
-# 2. Act on what you see (use element index from observe output)
-adb-claw tap --index 3
+# 2. Act from this snapshot. Coordinates are fastest; --index does not re-dump.
+adb-claw tap 540 960
+# or: adb-claw tap --index 3
 
-# 3. Verify the result
-adb-claw observe
+# 3. Re-observe only after navigation or STALE_STATE
 ```
 
-`observe` writes a JPEG to `data.screenshot.path`. **Read that file to see the screen.** Do not paste the observe JSON into notes.
+`observe` writes a JPEG to `data.screenshot.path` and a `state_id`. **Read that file to see the screen.** Do not paste the observe JSON into notes.
 
-**Tap using UI tree device pixels, never screenshot pixels.** `bounds` / `center` / `tap X Y` are device coordinates. Even if you pass `--width` to shrink the preview, `data.screenshot.scale` is metadata only — do not multiply or use image-pixel positions for `tap`.
+**Tap using UI tree device pixels, never screenshot pixels.** `bounds` / `center` / `tap X Y` are device coordinates. `--index` / `--id` / `--text` use the last observe snapshot and fail with `STALE_STATE` if it expired. Use `--refresh` only when you must dump again. Even if you pass `--width` to shrink the preview, `data.screenshot.scale` is metadata only — do not multiply or use image-pixel positions for `tap`.
 
 For CJK apps, use deep links to bypass text input limits:
 
@@ -253,14 +253,14 @@ Captures screenshot and UI element tree in one call. **Always use this before an
 Default: original-resolution **JPEG** (quality 70) written to `$TMPDIR/adb-claw-observe.jpg`. JSON returns **only** the file path plus `device_width` / `device_height` / `image_width` / `image_height` / `scale`. Image bytes and base64 are never printed to the console. UI tree `bounds` and `center` stay in **device pixels**.
 
 ```bash
-adb-claw observe                         # JPEG file + compact UI tree
-adb-claw observe --quality 50            # Smaller JPEG, same coordinates
-adb-claw observe --width 540             # Smaller preview only; tap coords unchanged
-adb-claw observe --file /tmp/screen.jpg  # Custom path
-adb-claw observe --format png            # PNG instead of JPEG
+adb-claw observe                         # JPEG file + compact UI tree + state_id
+adb-claw observe --quality 50 --width 540 --ui-mode realtime
+adb-claw observe --capture pull          # Faster on TCP/SSH ADB
+adb-claw observe --skip-screenshot       # UI snapshot only
+adb-claw observe --profile               # Segmented timing
 ```
 
-Returns: `screenshot.path` (read this image), size/scale metadata, indexed UI elements with text/id/bounds/center in device pixels.
+Returns: `state_id`, `screenshot.path` (read this image), size/scale metadata, indexed UI elements with handle/text/id/bounds/center in device pixels.
 
 **Never tap using pixels from the screenshot image.** Use `--index` / `--text` / `--id`, or `center` from the UI tree.
 
@@ -286,7 +286,7 @@ adb-claw tap --text "Submit"       # Tap by visible text
 adb-claw tap 540 960              # Tap coordinates (x y)
 ```
 
-**Always prefer `--index` over coordinates.** Index values come from `observe` output.
+**Prefer `center` coordinates from the last observe, or `--index` against that snapshot.** `--index` does **not** dump again. If you get `STALE_STATE`, re-run `observe` instead of guessing.
 
 ### long-press — Long Press
 
@@ -407,6 +407,24 @@ adb-claw app uninstall <pkg>            # Uninstall app
 adb-claw app clear <pkg>               # Clear app data/cache
 ```
 
+### serve — Persistent JSONL Session
+
+Long-lived control socket for Flash/Live adapters. Reads JSONL from stdin.
+
+```bash
+adb-claw serve --stdio --ui-mode realtime --capture auto --width 540
+```
+
+Methods: `ping`, `observe`, `act`, `close`. `observe` returns `state_id` and also emits `event.screenshot` / `event.ui` as soon as each part is ready. `act` uses that snapshot and never re-dumps. A stale `state_id` returns `STALE_STATE`.
+
+### bench — Device Latency Baseline
+
+```bash
+adb-claw bench --rounds 5 --width 540
+```
+
+Prints p50/p95/max for observe, UI dump, screenshot, and coordinate tap.
+
 ### monitor — Continuous UI Text Monitoring
 
 Monitor UI text by connecting directly to the Android accessibility framework. Unlike `ui tree` which uses `uiautomator dump`, this command skips video surface nodes and works reliably during live streams and video playback.
@@ -518,21 +536,23 @@ adb-claw ui find --index 3          # Find by index
 
 ## Workflow Patterns
 
-### Always Observe First
+### Observe, Then Act From the Snapshot
 
-Before any action, run `observe` to see the screen. After every action, `observe` again to verify.
+Run `observe` before the first action. Do **not** automatically observe after every tap.
 
 ```
-1. adb-claw observe          → Read data.screenshot.path; use UI tree indices
-2. adb-claw tap --index 3    → Perform action (device pixels / index)
-3. adb-claw observe          → Verify result
+1. adb-claw observe --width 540 --quality 50 --ui-mode realtime
+2. adb-claw tap <center.x> <center.y>   # or tap --index N from this snapshot
+3. Re-observe only after navigation or STALE_STATE
 ```
 
-Track progress (e.g. which games already signed in) in a short checklist. Do not paste observe JSON into notes — that blows the context window.
+Track progress in a short checklist. Do not paste observe JSON into notes.
 
-### Prefer Index-Based Targeting
+For a long-lived adapter use `adb-claw serve --stdio` and `act` with `state_id`.
 
-Use `--index N` over coordinates. Indices and `center` from `observe` are **device pixels**, stable across preview `--width`. Never convert screenshot-image pixels into `tap X Y`.
+### Prefer Snapshot Coordinates
+
+Use `center` from the last observe, or `--index N` against that snapshot. Both are **device pixels**, stable across preview `--width`. Never convert screenshot-image pixels into `tap X Y`. `--refresh` re-dumps and is slower — avoid it in a realtime loop.
 
 ### Type After Focus
 

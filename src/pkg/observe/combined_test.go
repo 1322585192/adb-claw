@@ -16,6 +16,12 @@ type mockObserveCommander struct {
 }
 
 func (m *mockObserveCommander) Shell(args ...string) (*adb.Result, error) {
+	if len(args) == 1 && strings.Contains(args[0], "uiautomator dump") {
+		return &adb.Result{Stdout: sampleXML}, nil
+	}
+	if len(args) >= 2 && args[0] == "sh" && args[1] == "-c" {
+		return &adb.Result{Stdout: sampleXML}, nil
+	}
 	if len(args) >= 2 && args[0] == "uiautomator" && args[1] == "dump" {
 		return &adb.Result{Stdout: "UI hierchary dumped to: " + args[2] + "\n"}, nil
 	}
@@ -120,5 +126,25 @@ func TestObserveScaledPreviewDoesNotChangeUICoords(t *testing.T) {
 	}
 	if len(result.Errors) > 0 {
 		t.Errorf("unexpected errors: %v", result.Errors)
+	}
+}
+
+func TestObserveStreamEmitsPartialEvents(t *testing.T) {
+	t.Setenv("TMPDIR", t.TempDir())
+	path := filepath.Join(t.TempDir(), "obs.jpg")
+	cmd := &mockObserveCommander{png: solidPNG(80, 120)}
+
+	var kinds []string
+	result := ObserveStream(cmd, ObserveOptions{Format: "jpeg", Path: path, Profile: true}, func(ev ObserveEvent) {
+		kinds = append(kinds, ev.Kind)
+	})
+	if result.Screenshot == nil || result.UI == nil {
+		t.Fatalf("incomplete result: %+v errors=%v", result, result.Errors)
+	}
+	if result.StateID == "" {
+		t.Fatal("expected state_id")
+	}
+	if len(kinds) != 2 {
+		t.Fatalf("events = %v, want screenshot and ui", kinds)
 	}
 }

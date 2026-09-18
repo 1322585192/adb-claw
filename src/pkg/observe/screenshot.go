@@ -9,8 +9,10 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/llm-net/adb-claw/pkg/adb"
+	"github.com/llm-net/adb-claw/pkg/perf"
 
 	"golang.org/x/image/draw"
 )
@@ -27,32 +29,41 @@ const DefaultScreenshotFileName = "adb-claw-screenshot"
 // CaptureOptions controls screenshot encoding and how it is returned.
 // Screenshots are always written to a file; JSON never includes image bytes or base64.
 type CaptureOptions struct {
-	MaxWidth int    // 0 = original device resolution (preview only; tap coords stay device pixels)
-	Format   string // "jpeg" (default) or "png"
-	Quality  int    // JPEG quality 1-100; default 70
-	Path     string // write encoded image here; empty → DefaultScreenshotPath(format)
+	MaxWidth int         // 0 = original device resolution (preview only; tap coords stay device pixels)
+	Format   string      // "jpeg" (default) or "png"
+	Quality  int         // JPEG quality 1-100; default 70
+	Path     string      // write encoded image here; empty → DefaultScreenshotPath(format)
+	Mode     CaptureMode // stream | pull | auto
+	Profile  bool        // include segmented timing
 }
 
 // ScreenshotResult holds screenshot metadata. Coordinates for tapping live in the UI tree
 // (device pixels). ImageWidth/Height describe the encoded preview only.
 type ScreenshotResult struct {
-	Format       string  `json:"format"`
-	Path         string  `json:"path"`
-	Size         int     `json:"size_bytes"`
-	DeviceWidth  int     `json:"device_width"`
-	DeviceHeight int     `json:"device_height"`
-	ImageWidth   int     `json:"image_width"`
-	ImageHeight  int     `json:"image_height"`
-	Scale        float64 `json:"scale"`
-	Bytes        []byte  `json:"-"`
+	Format       string         `json:"format"`
+	Path         string         `json:"path"`
+	Size         int            `json:"size_bytes"`
+	DeviceWidth  int            `json:"device_width"`
+	DeviceHeight int            `json:"device_height"`
+	ImageWidth   int            `json:"image_width"`
+	ImageHeight  int            `json:"image_height"`
+	Scale        float64        `json:"scale"`
+	Mode         string         `json:"mode,omitempty"`
+	Profile      *TimingProfile `json:"profile,omitempty"`
+	Bytes        []byte         `json:"-"`
 }
 
 // ObserveOptions controls a combined observe call.
 type ObserveOptions struct {
-	MaxWidth int
-	Format   string
-	Quality  int
-	Path     string
+	MaxWidth   int
+	Format     string
+	Quality    int
+	Path       string
+	Mode       CaptureMode
+	UIMode     UIMode
+	Compressed bool
+	Profile    bool
+	SkipImage  bool
 }
 
 func imageExt(format string) string {
@@ -93,7 +104,7 @@ func normalizeCaptureOptions(opts CaptureOptions) (CaptureOptions, error) {
 }
 
 // CaptureScreenshot captures the device screen, optionally downscales the preview,
-// encodes JPEG/PNG, and optionally writes a file. Device pixel size is always reported
+// encodes JPEG/PNG, and writes a file. Device pixel size is always reported
 // from the original screencap so tap coordinates stay in device space.
 func CaptureScreenshot(cmd adb.Commander, opts CaptureOptions) (*ScreenshotResult, error) {
 	opts, err := normalizeCaptureOptions(opts)
@@ -101,9 +112,14 @@ func CaptureScreenshot(cmd adb.Commander, opts CaptureOptions) (*ScreenshotResul
 		return nil, err
 	}
 
-	raw, err := cmd.ExecOut("screencap", "-p")
+	clock := perf.Start()
+	profile := &TimingProfile{}
+	mode := resolveCaptureMode(cmd, opts.Mode)
+	profile.Mode = string(mode)
+
+	raw, err := capturePNG(cmd, mode, profile)
 	if err != nil {
-		return nil, fmt.Errorf("screencap failed: %w", err)
+		return nil, err
 	}
 	if len(raw) == 0 {
 		return nil, fmt.Errorf("screencap returned empty data")
@@ -113,6 +129,7 @@ func CaptureScreenshot(cmd adb.Commander, opts CaptureOptions) (*ScreenshotResul
 	}
 
 	src, err := png.Decode(bytes.NewReader(raw))
+	profile.DecodeMs = clock.Lap()
 	if err != nil {
 		return nil, fmt.Errorf("decode screencap: %w", err)
 	}
@@ -128,11 +145,13 @@ func CaptureScreenshot(cmd adb.Commander, opts CaptureOptions) (*ScreenshotResul
 		draw.BiLinear.Scale(dst, dst.Bounds(), src, srcBounds, draw.Over, nil)
 		outImg = dst
 	}
+	profile.ResizeMs = clock.Lap()
 
 	imageW := outImg.Bounds().Dx()
 	imageH := outImg.Bounds().Dy()
 
 	data, err := encodeImage(outImg, opts.Format, opts.Quality)
+	profile.EncodeMs = clock.Lap()
 	if err != nil {
 		return nil, err
 	}
@@ -140,8 +159,10 @@ func CaptureScreenshot(cmd adb.Commander, opts CaptureOptions) (*ScreenshotResul
 	if err := os.WriteFile(opts.Path, data, 0644); err != nil {
 		return nil, fmt.Errorf("write screenshot file: %w", err)
 	}
+	profile.WriteMs = clock.Lap()
+	profile.TotalMs = clock.Total()
 
-	return &ScreenshotResult{
+	result := &ScreenshotResult{
 		Format:       opts.Format,
 		Path:         opts.Path,
 		Size:         len(data),
@@ -150,8 +171,72 @@ func CaptureScreenshot(cmd adb.Commander, opts CaptureOptions) (*ScreenshotResul
 		ImageWidth:   imageW,
 		ImageHeight:  imageH,
 		Scale:        scaleFactor(imageW, deviceW),
+		Mode:         string(mode),
 		Bytes:        data,
-	}, nil
+	}
+	if opts.Profile {
+		result.Profile = profile
+	}
+	return result, nil
+}
+
+func capturePNG(cmd adb.Commander, mode CaptureMode, profile *TimingProfile) ([]byte, error) {
+	if mode == CaptureModePull {
+		return capturePNGPull(cmd, profile)
+	}
+	clock := perf.Start()
+	raw, err := cmd.ExecOut("screencap", "-p")
+	profile.ADBCalls++
+	profile.TransferMs = clock.Total()
+	if err != nil {
+		return nil, fmt.Errorf("screencap failed: %w", err)
+	}
+	return raw, nil
+}
+
+func capturePNGPull(cmd adb.Commander, profile *TimingProfile) (data []byte, err error) {
+	devicePath := fmt.Sprintf("/data/local/tmp/adbclaw-screencap-%d.png", time.Now().UnixNano())
+	localPath := filepath.Join(os.TempDir(), fmt.Sprintf("adbclaw-screencap-%d.png", time.Now().UnixNano()))
+	defer os.Remove(localPath)
+	defer func() {
+		_, _ = cmd.Shell("rm", "-f", devicePath)
+		profile.ADBCalls++
+	}()
+
+	clock := perf.Start()
+	result, err := cmd.Shell("screencap", "-p", devicePath)
+	profile.ADBCalls++
+	profile.CaptureMs = clock.Lap()
+	if err != nil {
+		return nil, fmt.Errorf("screencap failed: %w", err)
+	}
+	if result.ExitCode != 0 {
+		msg := strings.TrimSpace(result.Stderr + result.Stdout)
+		if msg == "" {
+			msg = fmt.Sprintf("screencap exit %d", result.ExitCode)
+		}
+		return nil, fmt.Errorf("screencap failed: %s", msg)
+	}
+
+	pulled, err := cmd.RawCommand("pull", devicePath, localPath)
+	profile.ADBCalls++
+	profile.TransferMs = clock.Lap()
+	if err != nil {
+		return nil, fmt.Errorf("pull screenshot failed: %w", err)
+	}
+	if pulled.ExitCode != 0 {
+		msg := strings.TrimSpace(pulled.Stderr + pulled.Stdout)
+		if msg == "" {
+			msg = fmt.Sprintf("adb pull exit %d", pulled.ExitCode)
+		}
+		return nil, fmt.Errorf("pull screenshot failed: %s", msg)
+	}
+
+	raw, err := os.ReadFile(localPath)
+	if err != nil {
+		return nil, fmt.Errorf("read pulled screenshot: %w", err)
+	}
+	return raw, nil
 }
 
 func encodeImage(img image.Image, format string, quality int) ([]byte, error) {
@@ -193,6 +278,7 @@ func TakeScreenshot(cmd adb.Commander, maxWidth int) ([]byte, error) {
 		MaxWidth: maxWidth,
 		Format:   "png",
 		Path:     filepath.Join(os.TempDir(), "adb-claw-takescreenshot.png"),
+		Mode:     CaptureModeStream,
 	})
 	if err != nil {
 		return nil, err

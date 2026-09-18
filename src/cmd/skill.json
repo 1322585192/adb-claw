@@ -1,49 +1,57 @@
 {
   "name": "adb-claw",
-  "version": "1.2.0",
-  "description": "Android device control CLI for AI agent automation",
+  "version": "1.7.0",
+  "description": "Android device control CLI for AI agent automation. Realtime path: observe once, act from state_id/center, never re-dump on tap --index.",
   "capabilities": {
     "input_methods": ["adb_input"],
     "stealth_levels": ["off"],
     "humanize": false,
-    "unicode_input": false
+    "unicode_input": false,
+    "persistent_session": true,
+    "snapshot_actions": true
   },
   "tools": [
     {
       "name": "observe",
-      "description": "Capture screenshot + UI element tree + device state in one call. Default: JPEG file plus compact UI tree. JSON never includes image bytes or base64. Tap using UI tree device pixels, never screenshot-image pixels.",
-      "usage": "adb-claw observe [--quality 70] [--file path] [--width px] [--format jpeg|png]",
-      "returns": "screenshot.path + device/image size + scale, UI elements with index/id/text/bounds/center (device pixels)",
-      "when_to_use": "Before deciding any action. After every action to verify the result. Read the screenshot file; do not paste JSON into notes."
+      "description": "Capture screenshot + UI tree. Writes state_id snapshot. JSON never includes image bytes. Tap using UI tree device pixels.",
+      "usage": "adb-claw observe [--width 540] [--quality 50] [--capture auto|stream|pull] [--ui-mode full|compact|interactive|realtime] [--compressed] [--skip-screenshot] [--profile] [--file path]",
+      "returns": "state_id, screenshot.path + sizes/scale, UI elements with index/handle/id/text/bounds/center, optional profile",
+      "when_to_use": "Before deciding an action. After an action only when the page may have changed. Read the screenshot file; do not paste JSON into notes."
     },
     {
       "name": "screenshot",
       "description": "Capture a screenshot of the device screen.",
-      "usage": "adb-claw screenshot [-f file.jpg] [--format jpeg|png] [--quality 70] [--width px]",
-      "returns": "screenshot.path plus device/image size and scale (never base64)",
+      "usage": "adb-claw screenshot [-f file.jpg] [--capture auto|stream|pull] [--format jpeg|png] [--quality 70] [--width px] [--profile]",
+      "returns": "screenshot.path plus device/image size, scale, capture mode",
       "when_to_use": "When you only need the visual state without UI element data."
     },
     {
       "name": "tap",
-      "description": "Tap on a UI element or coordinate. Prefer --index (from observe) for reliability.",
-      "usage": "adb-claw tap {--index N | --id RESOURCE_ID | --text TEXT | X Y}",
-      "when_to_use": "To click buttons, links, input fields, or any interactive element."
+      "description": "Tap a coordinate or a cached UI element. --index/--id/--text use the last observe snapshot and do not dump unless --refresh.",
+      "usage": "adb-claw tap {X Y | --index N | --id RESOURCE_ID | --text TEXT} [--refresh]",
+      "when_to_use": "Prefer coordinates or last-observe index. --refresh only when the snapshot is missing or stale."
     },
     {
       "name": "long_press",
-      "description": "Long press on a coordinate.",
-      "usage": "adb-claw long-press X Y [--duration 1000]",
-      "when_to_use": "For context menus, drag initiation, or special long-press actions."
+      "description": "Long press a coordinate or cached UI element.",
+      "usage": "adb-claw long-press {X Y | --index N | --id ID | --text TEXT} [--duration 1000] [--refresh]",
+      "when_to_use": "For context menus or long-press actions."
     },
     {
       "name": "swipe",
       "description": "Swipe from one point to another.",
       "usage": "adb-claw swipe X1 Y1 X2 Y2 [--duration 300]",
-      "when_to_use": "To scroll content, dismiss notifications, or navigate between pages."
+      "when_to_use": "To scroll content or dismiss UI."
+    },
+    {
+      "name": "scroll",
+      "description": "Smart scroll using screen or cached element bounds.",
+      "usage": "adb-claw scroll {up|down|left|right} [--pages N] [--index N] [--refresh]",
+      "when_to_use": "Prefer this over raw swipe for page navigation."
     },
     {
       "name": "type",
-      "description": "Input text into the currently focused field.",
+      "description": "Input ASCII text into the focused field.",
       "usage": "adb-claw type TEXT",
       "when_to_use": "After tapping an input field to focus it."
     },
@@ -54,65 +62,79 @@
       "when_to_use": "To navigate back, go home, confirm input, or control device."
     },
     {
+      "name": "clear_field",
+      "description": "Clear the focused input field. Optional cached element tap first.",
+      "usage": "adb-claw clear-field [--index N | --id ID | --text TEXT] [--refresh]",
+      "when_to_use": "Before typing into a field that already has text."
+    },
+    {
+      "name": "open",
+      "description": "Open a URI or app deep link.",
+      "usage": "adb-claw open URI",
+      "when_to_use": "To jump to a screen or pass CJK text as a URL parameter."
+    },
+    {
+      "name": "wait",
+      "description": "Wait for a UI element or activity to appear or disappear.",
+      "usage": "adb-claw wait {--text TEXT | --id ID | --activity NAME} [--gone] [--timeout ms]",
+      "when_to_use": "Instead of polling observe after a navigation."
+    },
+    {
+      "name": "monitor",
+      "description": "Stream or collect UI text via accessibility. Host owns --duration.",
+      "usage": "adb-claw monitor [--duration ms] [--interval ms] [--stream] [--profile]",
+      "when_to_use": "Live streams / video pages where uiautomator dump hangs."
+    },
+    {
+      "name": "serve",
+      "description": "Persistent JSONL session. observe returns state_id; act uses it and never re-dumps.",
+      "usage": "adb-claw serve --stdio [--ui-mode realtime] [--capture auto] [--width 540]",
+      "when_to_use": "Flash/Live adapters that need a long-lived low-latency control socket."
+    },
+    {
+      "name": "bench",
+      "description": "Measure observe/dump/screenshot/tap p50/p95 on a connected device.",
+      "usage": "adb-claw bench [--rounds 5] [--width 540]",
+      "when_to_use": "To collect a repeatable latency baseline."
+    },
+    {
       "name": "app_launch",
       "description": "Launch an app by package name.",
       "usage": "adb-claw app launch PACKAGE_NAME",
-      "when_to_use": "To open a specific app. Use 'app list' first to find the package name."
-    },
-    {
-      "name": "app_stop",
-      "description": "Force stop an app.",
-      "usage": "adb-claw app stop PACKAGE_NAME",
-      "when_to_use": "To close an app completely."
+      "when_to_use": "To open a specific app."
     },
     {
       "name": "app_current",
       "description": "Get the currently focused app and activity.",
       "usage": "adb-claw app current",
-      "when_to_use": "To check which app is in the foreground."
-    },
-    {
-      "name": "app_list",
-      "description": "List installed apps on the device.",
-      "usage": "adb-claw app list [--all]",
-      "when_to_use": "To find package names of installed apps."
+      "when_to_use": "To load an App Profile or confirm navigation."
     },
     {
       "name": "device_info",
-      "description": "Get device details: model, screen size, Android version, battery.",
+      "description": "Get device details: model, screen size, Android version.",
       "usage": "adb-claw device info",
-      "when_to_use": "At the start of a session to understand the device."
-    },
-    {
-      "name": "device_list",
-      "description": "List all connected Android devices.",
-      "usage": "adb-claw device list",
-      "when_to_use": "To see available devices before starting."
+      "when_to_use": "At the start of a session."
     },
     {
       "name": "ui_tree",
-      "description": "Get the full UI element tree with indexed elements.",
-      "usage": "adb-claw ui tree",
-      "when_to_use": "When you need detailed UI structure without a screenshot."
-    },
-    {
-      "name": "ui_find",
-      "description": "Search for UI elements by text, resource-id, or index.",
-      "usage": "adb-claw ui find {--text TEXT | --id ID | --index N}",
-      "when_to_use": "To find specific elements without dumping the full tree."
+      "description": "Dump the indexed UI tree and refresh the action snapshot.",
+      "usage": "adb-claw ui tree [--ui-mode realtime] [--compressed] [--profile]",
+      "when_to_use": "When you need UI structure without a screenshot."
     },
     {
       "name": "live_cart",
-      "description": "Grab products from Douyin live stream shopping cart (小黄车). Captures the currently explaining product and the first N products. Douyin-specific.",
+      "description": "Grab products from a Douyin live shopping cart.",
       "usage": "adb-claw live cart [--count 10]",
-      "when_to_use": "When viewing a Douyin live stream and need to extract shopping cart product data."
+      "when_to_use": "When viewing a Douyin live stream with a shopping cart."
     }
   ],
   "workflow_hints": {
-    "observe_first": "Always run 'observe' before deciding an action and after performing an action to verify results. Read data.screenshot.path; JSON never includes image bytes.",
-    "prefer_index": "When tapping, prefer --index over coordinates. Indices and center from observe are device pixels. Never tap using screenshot-image pixels even if --width scaled the preview.",
-    "type_after_focus": "Always tap an input field first, then use 'type' to enter text.",
-    "scroll_pattern": "To scroll down: swipe from bottom-center to top-center (e.g., swipe 540 1800 540 600).",
-    "error_handling": "If an action fails, re-observe to see the current state before retrying."
+    "observe_first": "Run observe once, then act from data.ui.elements[].center or --index against that snapshot. Do not re-observe after every tap unless the page changed.",
+    "prefer_center_or_snapshot": "tap X Y from center is fastest. tap --index uses the last snapshot and fails with STALE_STATE if it expired. Never tap screenshot-image pixels.",
+    "avoid_refresh": "Do not pass --refresh unless observe failed or the snapshot expired.",
+    "type_after_focus": "Tap an input field first, then type.",
+    "scroll_pattern": "Prefer scroll over swipe. Observe after scrolling.",
+    "serve_for_realtime": "For Flash/Live loops use adb-claw serve and act(state_id, handle).",
+    "error_handling": "STALE_STATE means re-observe. Do not guess a new index."
   }
 }

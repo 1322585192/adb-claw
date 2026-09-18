@@ -190,6 +190,80 @@ func TestDefaultObservePath(t *testing.T) {
 	}
 }
 
+type recordingPullCommander struct {
+	png        []byte
+	calls      [][]string
+	deviceFile string
+}
+
+func (m *recordingPullCommander) Shell(args ...string) (*adb.Result, error) {
+	m.calls = append(m.calls, append([]string{"shell"}, args...))
+	if len(args) >= 1 && args[0] == "screencap" {
+		if len(args) < 3 {
+			return &adb.Result{ExitCode: 1, Stderr: "missing path"}, nil
+		}
+		m.deviceFile = args[2]
+		return &adb.Result{}, nil
+	}
+	if len(args) >= 1 && args[0] == "rm" {
+		return &adb.Result{}, nil
+	}
+	return &adb.Result{}, nil
+}
+
+func (m *recordingPullCommander) ExecOut(args ...string) ([]byte, error) {
+	m.calls = append(m.calls, append([]string{"exec-out"}, args...))
+	return nil, fmt.Errorf("stream should not be used in pull mode")
+}
+
+func (m *recordingPullCommander) RawCommand(args ...string) (*adb.Result, error) {
+	m.calls = append(m.calls, append([]string{"raw"}, args...))
+	if len(args) >= 3 && args[0] == "pull" {
+		if err := os.WriteFile(args[2], m.png, 0644); err != nil {
+			return nil, err
+		}
+		return &adb.Result{}, nil
+	}
+	return nil, fmt.Errorf("unexpected raw %v", args)
+}
+
+func TestCaptureScreenshotPullWritesFileAndCleansDevice(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "pull.jpg")
+	cmd := &recordingPullCommander{png: solidPNG(80, 120)}
+
+	result, err := CaptureScreenshot(cmd, CaptureOptions{
+		Format:  "jpeg",
+		Path:    path,
+		Mode:    CaptureModePull,
+		Profile: true,
+	})
+	if err != nil {
+		t.Fatalf("CaptureScreenshot: %v", err)
+	}
+	if result.Mode != string(CaptureModePull) {
+		t.Errorf("mode = %q", result.Mode)
+	}
+	if result.Profile == nil || result.Profile.ADBCalls < 3 {
+		t.Fatalf("expected at least 3 ADB calls (screencap/pull/rm), got %+v", result.Profile)
+	}
+	sawPull, sawRm := false, false
+	for _, c := range cmd.calls {
+		if len(c) >= 2 && c[0] == "raw" && c[1] == "pull" {
+			sawPull = true
+		}
+		if len(c) >= 2 && c[0] == "shell" && c[1] == "rm" {
+			sawRm = true
+		}
+	}
+	if !sawPull || !sawRm {
+		t.Fatalf("expected pull and rm, calls=%v", cmd.calls)
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestTakeScreenshotPNG(t *testing.T) {
 	cmd := &mockCaptureCommander{png: solidPNG(64, 32)}
 	data, err := TakeScreenshot(cmd, 0)

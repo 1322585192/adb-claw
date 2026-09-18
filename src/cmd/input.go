@@ -6,14 +6,14 @@ import (
 	"time"
 
 	"github.com/llm-net/adb-claw/pkg/input"
-	"github.com/llm-net/adb-claw/pkg/observe"
 	"github.com/spf13/cobra"
 )
 
 var (
-	tapIndex int
-	tapID    string
-	tapText  string
+	tapIndex        int
+	tapID           string
+	tapText         string
+	refreshElements bool
 )
 
 var tapCmd = &cobra.Command{
@@ -35,8 +35,8 @@ var tapCmd = &cobra.Command{
 		case cmd.Flags().Changed("index"):
 			el, err := resolveElementByIndex(tapIndex)
 			if err != nil {
-				writer.Fail("tap", "ELEMENT_NOT_FOUND", err.Error(),
-					"Use 'adb-claw ui tree' to see available elements", start)
+				writer.Fail("tap", resolveErrorCode(err), err.Error(),
+					"Run observe first, pass coordinates, or use --refresh", start)
 				return nil
 			}
 			x, y = el.Center.X, el.Center.Y
@@ -45,8 +45,8 @@ var tapCmd = &cobra.Command{
 		case tapID != "":
 			el, err := resolveElementByID(tapID)
 			if err != nil {
-				writer.Fail("tap", "ELEMENT_NOT_FOUND", err.Error(),
-					"Use 'adb-claw ui tree' to see available elements", start)
+				writer.Fail("tap", resolveErrorCode(err), err.Error(),
+					"Run observe first, pass coordinates, or use --refresh", start)
 				return nil
 			}
 			x, y = el.Center.X, el.Center.Y
@@ -55,8 +55,8 @@ var tapCmd = &cobra.Command{
 		case tapText != "":
 			el, err := resolveElementByText(tapText)
 			if err != nil {
-				writer.Fail("tap", "ELEMENT_NOT_FOUND", err.Error(),
-					"Use 'adb-claw ui tree' to see available elements", start)
+				writer.Fail("tap", resolveErrorCode(err), err.Error(),
+					"Run observe first, pass coordinates, or use --refresh", start)
 				return nil
 			}
 			x, y = el.Center.X, el.Center.Y
@@ -126,8 +126,8 @@ var longPressCmd = &cobra.Command{
 		case cmd.Flags().Changed("index"):
 			el, err := resolveElementByIndex(longPressIndex)
 			if err != nil {
-				writer.Fail("long-press", "ELEMENT_NOT_FOUND", err.Error(),
-					"Use 'adb-claw ui tree' to see available elements", start)
+				writer.Fail("long-press", resolveErrorCode(err), err.Error(),
+					"Run observe first, pass coordinates, or use --refresh", start)
 				return nil
 			}
 			x, y = el.Center.X, el.Center.Y
@@ -136,8 +136,8 @@ var longPressCmd = &cobra.Command{
 		case longPressID != "":
 			el, err := resolveElementByID(longPressID)
 			if err != nil {
-				writer.Fail("long-press", "ELEMENT_NOT_FOUND", err.Error(),
-					"Use 'adb-claw ui tree' to see available elements", start)
+				writer.Fail("long-press", resolveErrorCode(err), err.Error(),
+					"Run observe first, pass coordinates, or use --refresh", start)
 				return nil
 			}
 			x, y = el.Center.X, el.Center.Y
@@ -146,8 +146,8 @@ var longPressCmd = &cobra.Command{
 		case longPressText != "":
 			el, err := resolveElementByText(longPressText)
 			if err != nil {
-				writer.Fail("long-press", "ELEMENT_NOT_FOUND", err.Error(),
-					"Use 'adb-claw ui tree' to see available elements", start)
+				writer.Fail("long-press", resolveErrorCode(err), err.Error(),
+					"Run observe first, pass coordinates, or use --refresh", start)
 				return nil
 			}
 			x, y = el.Center.X, el.Center.Y
@@ -281,14 +281,16 @@ var typeCmd = &cobra.Command{
 }
 
 func init() {
-	tapCmd.Flags().IntVar(&tapIndex, "index", -1, "Tap element by UI tree index")
-	tapCmd.Flags().StringVar(&tapID, "id", "", "Tap element by resource-id")
-	tapCmd.Flags().StringVar(&tapText, "text", "", "Tap element by text content")
+	tapCmd.Flags().IntVar(&tapIndex, "index", -1, "Tap element by UI tree index from the last observe snapshot")
+	tapCmd.Flags().StringVar(&tapID, "id", "", "Tap element by resource-id from the last observe snapshot")
+	tapCmd.Flags().StringVar(&tapText, "text", "", "Tap element by text content from the last observe snapshot")
+	tapCmd.Flags().BoolVar(&refreshElements, "refresh", false, "Re-dump the UI tree instead of using the last observe snapshot")
 
 	longPressCmd.Flags().IntVar(&longPressDuration, "duration", 1000, "Long press duration in ms")
-	longPressCmd.Flags().IntVar(&longPressIndex, "index", -1, "Long press element by UI tree index")
-	longPressCmd.Flags().StringVar(&longPressID, "id", "", "Long press element by resource-id")
-	longPressCmd.Flags().StringVar(&longPressText, "text", "", "Long press element by text content")
+	longPressCmd.Flags().IntVar(&longPressIndex, "index", -1, "Long press element by UI tree index from the last observe snapshot")
+	longPressCmd.Flags().StringVar(&longPressID, "id", "", "Long press element by resource-id from the last observe snapshot")
+	longPressCmd.Flags().StringVar(&longPressText, "text", "", "Long press element by text content from the last observe snapshot")
+	longPressCmd.Flags().BoolVar(&refreshElements, "refresh", false, "Re-dump the UI tree instead of using the last observe snapshot")
 
 	swipeCmd.Flags().IntVar(&swipeDuration, "duration", 300, "Swipe duration in ms")
 
@@ -297,55 +299,4 @@ func init() {
 	rootCmd.AddCommand(swipeCmd)
 	rootCmd.AddCommand(keyCmd)
 	rootCmd.AddCommand(typeCmd)
-}
-
-// resolveElementByIndex does a fresh UI dump and finds element by index.
-func resolveElementByIndex(index int) (*observe.Element, error) {
-	tree, err := observe.DumpUITree(client)
-	if err != nil {
-		return nil, fmt.Errorf("ui tree dump failed: %w", err)
-	}
-	return tree.FindByIndex(index)
-}
-
-// resolveElementByID does a fresh UI dump and finds first element matching resource-id.
-func resolveElementByID(id string) (*observe.Element, error) {
-	tree, err := observe.DumpUITree(client)
-	if err != nil {
-		return nil, fmt.Errorf("ui tree dump failed: %w", err)
-	}
-	results := tree.FindByID(id)
-	if len(results) == 0 {
-		return nil, fmt.Errorf("no element found with id '%s'", id)
-	}
-	return &results[0], nil
-}
-
-// resolveElementByText does a fresh UI dump and finds first element matching text.
-func resolveElementByText(text string) (*observe.Element, error) {
-	tree, err := observe.DumpUITree(client)
-	if err != nil {
-		return nil, fmt.Errorf("ui tree dump failed: %w", err)
-	}
-	results := tree.FindByText(text)
-	if len(results) == 0 {
-		return nil, fmt.Errorf("no element found with text '%s'", text)
-	}
-	return &results[0], nil
-}
-
-func elementInfo(el *observe.Element) map[string]interface{} {
-	info := map[string]interface{}{
-		"index": el.Index,
-	}
-	if el.Text != "" {
-		info["text"] = el.Text
-	}
-	if el.ResourceID != "" {
-		info["resource_id"] = el.ResourceID
-	}
-	if el.ContentDesc != "" {
-		info["content_desc"] = el.ContentDesc
-	}
-	return info
 }

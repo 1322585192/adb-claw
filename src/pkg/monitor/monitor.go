@@ -12,8 +12,10 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/llm-net/adb-claw/pkg/adb"
+	"github.com/llm-net/adb-claw/pkg/perf"
 )
 
 //go:embed classes.dex
@@ -27,12 +29,22 @@ type TextEntry struct {
 	Class string `json:"class"`
 }
 
+// Timing captures monitor lifecycle latency.
+type Timing struct {
+	EnsureDEXMs  int64 `json:"ensure_dex_ms,omitempty"`
+	StartMs      int64 `json:"start_ms,omitempty"`
+	FirstEventMs int64 `json:"first_event_ms,omitempty"`
+	ExitMs       int64 `json:"exit_ms,omitempty"`
+	TotalMs      int64 `json:"total_ms,omitempty"`
+}
+
 // Process wraps an adb shell subprocess running the monitor DEX.
 type Process struct {
 	cmd    *exec.Cmd
 	stdout io.ReadCloser
 	lines  chan string
 	done   chan struct{}
+	clock  perf.Timing
 }
 
 // EnsureDEX pushes the embedded DEX file to the device if not already present
@@ -98,6 +110,7 @@ func Start(ctx context.Context, client *adb.Client, interval int, count int) (*P
 		stdout: stdout,
 		lines:  make(chan string, 64),
 		done:   make(chan struct{}),
+		clock:  perf.Start(),
 	}
 
 	go p.readLines()
@@ -112,7 +125,13 @@ func (p *Process) Lines() <-chan string {
 // Wait waits for the monitor process to exit and returns any error.
 func (p *Process) Wait() error {
 	<-p.done
-	return p.cmd.Wait()
+	err := p.cmd.Wait()
+	return err
+}
+
+// StartedAt returns when the process started collecting output.
+func (p *Process) Elapsed() time.Duration {
+	return time.Duration(p.clock.Total()) * time.Millisecond
 }
 
 // Stop kills the monitor process.

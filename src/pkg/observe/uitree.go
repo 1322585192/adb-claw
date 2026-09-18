@@ -3,12 +3,13 @@ package observe
 import (
 	"encoding/xml"
 	"fmt"
-	"math/rand"
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/llm-net/adb-claw/pkg/adb"
+	"github.com/llm-net/adb-claw/pkg/perf"
 )
 
 // Bounds represents the bounding box of a UI element.
@@ -29,6 +30,7 @@ type Point struct {
 // Bounds and Center are always device pixels (not screenshot preview pixels).
 type Element struct {
 	Index       int    `json:"index"`
+	Handle      string `json:"handle,omitempty"`
 	Class       string `json:"class,omitempty"`
 	ResourceID  string `json:"resource_id,omitempty"`
 	Text        string `json:"text,omitempty"`
@@ -46,8 +48,18 @@ type Element struct {
 
 // UITree holds the parsed UI hierarchy.
 type UITree struct {
-	Package  string    `json:"package,omitempty"`
-	Elements []Element `json:"elements"`
+	Package  string         `json:"package,omitempty"`
+	StateID  string         `json:"state_id,omitempty"`
+	Elements []Element      `json:"elements"`
+	Profile  *TimingProfile `json:"profile,omitempty"`
+}
+
+// DumpOptions controls how the UI hierarchy is fetched and filtered.
+type DumpOptions struct {
+	Compressed bool
+	Mode       UIMode
+	Profile    bool
+	Save       bool
 }
 
 // xmlNode represents a node in the uiautomator XML dump.
@@ -120,32 +132,47 @@ func isSignificant(n *xmlNode) bool {
 	return false
 }
 
-// DumpUITree runs "uiautomator dump" and returns the parsed XML.
-func DumpUITree(cmd adb.Commander) (*UITree, error) {
-	// Use a unique file path to avoid conflicts with concurrent calls.
-	devicePath := fmt.Sprintf("/sdcard/adbclaw_uidump_%d.xml", rand.Int())
+func isInteractive(el Element) bool {
+	return el.Clickable || el.Scrollable || el.Focusable || el.Text != "" || el.ContentDesc != "" || el.ResourceID != ""
+}
 
-	// Dump UI hierarchy to a file on device, then cat it back.
-	// Using /dev/tty to stream XML to stdout no longer works on Android 16+.
-	result, err := cmd.Shell("uiautomator", "dump", devicePath)
+// DumpUITree runs a single-shell uiautomator dump and returns the parsed XML.
+func DumpUITree(cmd adb.Commander) (*UITree, error) {
+	return DumpUITreeOpts(cmd, DumpOptions{Save: true})
+}
+
+// DumpUITreeOpts dumps and optionally filters/profiles the UI tree.
+func DumpUITreeOpts(cmd adb.Commander, opts DumpOptions) (*UITree, error) {
+	clock := perf.Start()
+	profile := &TimingProfile{Mode: "combined"}
+	if opts.Compressed {
+		profile.Mode = "combined-compressed"
+	}
+
+	devicePath := fmt.Sprintf("/data/local/tmp/adbclaw_uidump_%d.xml", time.Now().UnixNano())
+	dump := "uiautomator dump"
+	if opts.Compressed {
+		dump += " --compressed"
+	}
+	// Pass a single adb-shell string. `adb shell sh -c ...` is double-parsed and
+	// only runs `uiautomator` on many devices.
+	script := fmt.Sprintf("%s %s >/dev/null && cat %s; ec=$?; rm -f %s; exit $ec", dump, devicePath, devicePath, devicePath)
+
+	result, err := cmd.Shell(script)
+	profile.ADBCalls = 1
+	profile.DumpMs = clock.Lap()
 	if err != nil {
 		return nil, fmt.Errorf("uiautomator dump failed: %w", err)
 	}
-	if !strings.Contains(result.Stdout, "dumped to:") {
-		return nil, fmt.Errorf("uiautomator dump unexpected output: %s", truncate(result.Stdout, 200))
+	if result.ExitCode != 0 {
+		msg := strings.TrimSpace(result.Stderr + result.Stdout)
+		if msg == "" {
+			msg = fmt.Sprintf("uiautomator dump exit %d", result.ExitCode)
+		}
+		return nil, fmt.Errorf("uiautomator dump failed: %s", truncate(msg, 200))
 	}
 
-	// Read the dumped file
-	catResult, err := cmd.Shell("cat", devicePath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read UI dump file: %w", err)
-	}
-
-	// Best-effort cleanup
-	_, _ = cmd.Shell("rm", "-f", devicePath)
-
-	xmlData := catResult.Stdout
-	// Find the XML start — there may be leading whitespace or BOM.
+	xmlData := result.Stdout
 	idx := strings.Index(xmlData, "<?xml")
 	if idx < 0 {
 		idx = strings.Index(xmlData, "<hierarchy")
@@ -155,7 +182,63 @@ func DumpUITree(cmd adb.Commander) (*UITree, error) {
 	}
 	xmlData = xmlData[idx:]
 
-	return ParseUITree([]byte(xmlData))
+	tree, err := ParseUITree([]byte(xmlData))
+	profile.ParseMs = clock.Lap()
+	if err != nil {
+		return nil, err
+	}
+
+	tree = applyUIMode(tree, opts.Mode)
+	tree.StateID = NewStateID()
+	profile.TotalMs = clock.Total()
+	if opts.Profile {
+		tree.Profile = profile
+	}
+	if opts.Save {
+		if _, err := SaveSnapshot(commanderSerial(cmd), tree); err != nil {
+			// Snapshot cache is an optimization; dump success still stands.
+			_ = err
+		}
+	}
+	return tree, nil
+}
+
+func applyUIMode(tree *UITree, mode UIMode) *UITree {
+	mode = normalizeUIMode(mode)
+	if tree == nil || mode == UIModeFull {
+		assignHandles(tree)
+		return tree
+	}
+
+	out := make([]Element, 0, len(tree.Elements))
+	for _, el := range tree.Elements {
+		if mode == UIModeInteractive && !isInteractive(el) {
+			continue
+		}
+		if mode == UIModeCompact || mode == UIModeRealtime {
+			el.Class = ""
+			el.PackageName = ""
+			if mode == UIModeRealtime && !el.Clickable && !el.Scrollable && el.Text == "" && el.ContentDesc == "" && el.ResourceID == "" {
+				continue
+			}
+		}
+		out = append(out, el)
+	}
+	for i := range out {
+		out[i].Index = i
+	}
+	tree.Elements = out
+	assignHandles(tree)
+	return tree
+}
+
+func assignHandles(tree *UITree) {
+	if tree == nil {
+		return
+	}
+	for i := range tree.Elements {
+		tree.Elements[i].Handle = fmt.Sprintf("e%d", tree.Elements[i].Index)
+	}
 }
 
 // ParseUITree parses uiautomator XML into a UITree with indexed elements.
@@ -201,7 +284,9 @@ func ParseUITree(data []byte) (*UITree, error) {
 	walk(h.Nodes)
 
 	pkg, elements := hoistPackage(elements)
-	return &UITree{Package: pkg, Elements: elements}, nil
+	tree := &UITree{Package: pkg, Elements: elements}
+	assignHandles(tree)
+	return tree, nil
 }
 
 // hoistPackage lifts the most common package name to the tree level and
@@ -240,6 +325,28 @@ func (t *UITree) FindByIndex(index int) (*Element, error) {
 	return &t.Elements[index], nil
 }
 
+// FindByHandle returns the element with the given handle or index string.
+func (t *UITree) FindByHandle(handle string) (*Element, error) {
+	handle = strings.TrimSpace(handle)
+	if handle == "" {
+		return nil, fmt.Errorf("empty element handle")
+	}
+	for i := range t.Elements {
+		if t.Elements[i].Handle == handle {
+			return &t.Elements[i], nil
+		}
+	}
+	if strings.HasPrefix(handle, "e") {
+		if n, err := strconv.Atoi(handle[1:]); err == nil {
+			return t.FindByIndex(n)
+		}
+	}
+	if n, err := strconv.Atoi(handle); err == nil {
+		return t.FindByIndex(n)
+	}
+	return nil, fmt.Errorf("no element with handle %q", handle)
+}
+
 // FindByText returns elements whose text contains the query (case-insensitive).
 func (t *UITree) FindByText(query string) []Element {
 	query = strings.ToLower(query)
@@ -263,6 +370,32 @@ func (t *UITree) FindByID(query string) []Element {
 		}
 	}
 	return results
+}
+
+// Hash returns a stable fingerprint of interactive nodes for delta detection.
+func (t *UITree) Hash() string {
+	if t == nil {
+		return ""
+	}
+	var b strings.Builder
+	for _, el := range t.Elements {
+		fmt.Fprintf(&b, "%s|%s|%s|%d,%d|%t|%t;", el.Text, el.ContentDesc, el.ResourceID, el.Center.X, el.Center.Y, el.Clickable, el.Scrollable)
+	}
+	sum := sha1Short(b.String())
+	return sum
+}
+
+func sha1Short(s string) string {
+	// local import avoided circular issues — keep tiny helper here via fmt only
+	h := 2166136261
+	for i := 0; i < len(s); i++ {
+		h ^= int(s[i])
+		h *= 16777619
+	}
+	if h < 0 {
+		h = -h
+	}
+	return fmt.Sprintf("%08x", h)
 }
 
 func truncate(s string, n int) string {

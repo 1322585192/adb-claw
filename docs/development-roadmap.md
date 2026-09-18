@@ -56,6 +56,10 @@
 | 任务 | 说明 |
 |------|------|
 | 截屏体积优化 | `observe` 默认 JPEG 文件 + compact UI 树；坐标保持设备像素 | ✅ |
+| UI dump 单次 shell + 可选 compressed | 合并 dump/cat/rm | ✅ |
+| 远程截图 pull mode | TCP/SSH ADB 走设备落盘 + adb pull | ✅ |
+| 索引动作快照 | tap --index 使用 observe state_id，禁止静默重 dump | ✅ |
+| serve JSONL | 持久会话 + STALE_STATE | ✅ |
 | observe 重试机制 | `uiautomator dump` 失败时自动重试 |
 | `device connect` | 无线 ADB 连接（`adb tcpip` + `adb connect`） |
 
