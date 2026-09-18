@@ -88,7 +88,7 @@ Packaged OpenClaw binaries are macOS/Linux. On Windows, use an `adb-claw` alread
 1. **Read the JPEG before every coordinate action.** Parse JSON only to get `data.screenshot.path` and the token. Open that image. Decide from pixels, not from memory.
 2. **Never sleep.** No `sleep`, `time.sleep`, `adb-claw shell sleep`, `adb shell sleep`, “wait 1 second”, or a `wait --timeout` with neither `--changed` nor `--activity`.
 3. **Never tap JPEG pixels or device pixels.** Always `--normalized --frame TOKEN`. Never `--raw`.
-4. **Never reuse an old path or token.** After `--wait-changed`, the next action uses `data.screenshot.path` and `data.screenshot.frame_token`. Top-level `data.frame_token` is the frame you just acted on — do not reuse it.
+4. **Never reuse an old path or token across observe rounds.** `chain` is the exception: every step shares **this JPEG's** token. After `--wait-changed`, the next action uses `data.screenshot.path` and `data.screenshot.frame_token`. Top-level `data.frame_token` is the frame you just acted on — do not reuse it.
 5. **Device work uses adb-claw only.** No host `curl` / `find` / Python control loops. No `uiautomator`, layout/accessibility `dumpsys`, clipboard binder calls, IME changes, or helper APKs (including ADBKeyboard).
 6. **Stay on the one-shot CLI.** Do not start `serve`, `bench`, `screenshot`, `--capture pull`, or `pump start/stop` unless the user asked for that diagnostic, or [COMMANDS.md](COMMANDS.md) says to.
 
@@ -98,11 +98,14 @@ adb-claw tap --normalized 500 500 --frame FRAME_TOKEN
 sleep 2
 adb-claw observe
 
-# RIGHT — act and read the returned JPEG
+# RIGHT — one target
 adb-claw tap --normalized 500 500 --frame FRAME_TOKEN --wait-changed 1500
+
+# RIGHT — two targets already visible on this JPEG (chess: piece then square)
+adb-claw chain --normalized --frame FRAME_TOKEN --wait-changed 1500 tap 180 720 tap 420 310
 ```
 
-`long-press --duration` is the press itself, not a pause between commands.
+`long-press --duration` and `chain --gap-ms` are gesture timing, not a pause between commands.
 
 ## First session
 
@@ -118,14 +121,16 @@ Requires `adb` on `PATH` (Android SDK platform-tools). Quality defaults to 60; d
 
 ```text
 observe → open JPEG → (app current / Profile / open) →
-tap|swipe|scroll --normalized --frame TOKEN --wait-changed →
+tap|chain|swipe|scroll --normalized --frame TOKEN --wait-changed →
 open the returned JPEG → repeat
 ```
+
+If this JPEG already shows every target you need (select then drop, two visible buttons), use `chain` — do not `tap --wait-changed` and re-read between those steps. Do **not** chain a target that is not on this picture (new page, keyboard, confirm dialog, or a legal square that only appears after selection).
 
 | What just happened | Next step |
 |--------------------|-----------|
 | `observe` returned | Open `data.screenshot.path`. Keep `data.screenshot.frame_token`. |
-| `tap` / `swipe` / `scroll` / `long-press` with `--wait-changed` | Open `data.screenshot.path`. Next token is `data.screenshot.frame_token`. |
+| `tap` / `chain` / `swipe` / `scroll` / `long-press` with `--wait-changed` | Open `data.screenshot.path`. Next token is `data.screenshot.frame_token`. |
 | `type` / `key` / `clear-field` | `observe` immediately. Use the new token. |
 | `open` / `app launch` | `observe` immediately. Wait only if that frame is still a loading splash you cannot act on. |
 | Action ran without `--wait-changed` | `wait --changed --after-frame TOKEN` and open its `data.screenshot.path`. |
@@ -176,6 +181,7 @@ No Profile → observe and tap.
 ```bash
 adb-claw observe
 adb-claw tap --normalized X Y --frame TOKEN --wait-changed 1500
+adb-claw chain --normalized --frame TOKEN --wait-changed 1500 tap X1 Y1 tap X2 Y2
 adb-claw long-press --normalized X Y --frame TOKEN --duration 2000
 adb-claw swipe --normalized X1 Y1 X2 Y2 --frame TOKEN --wait-changed 1500
 adb-claw scroll down --pages 2 --frame TOKEN --wait-changed 1500

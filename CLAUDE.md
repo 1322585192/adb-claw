@@ -54,6 +54,7 @@ src/
     ├── pump/               # 后台持续出帧（只留最新一帧）
     ├── server/             # serve JSONL：frame.latest / act
     ├── input/              # tap/swipe/key/type
+    ├── chain/              # 同帧多步动作链
     ├── device/             # 屏幕状态
     ├── audio/              # 独立 audio CLI
     ├── output/             # JSON envelope
@@ -95,6 +96,7 @@ adb-claw
 ├── screenshot [--file path] [--width px] [--max-pixels N]
 ├── pump [--daemon] | status | stop
 ├── tap <x> <y> --normalized --frame TOKEN [--wait-changed ms]
+├── chain --normalized --frame TOKEN tap X Y tap X Y [--wait-changed ms]
 ├── long-press <x> <y> --normalized --frame TOKEN [--duration ms]
 ├── swipe <x1> <y1> <x2> <y2> --normalized --frame TOKEN
 ├── key <HOME|BACK|ENTER|...>

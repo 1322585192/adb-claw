@@ -31,7 +31,13 @@
       "name": "tap",
       "description": "Tap using a 0-999 grid bound to the latest frame token.",
       "usage": "adb-claw tap --normalized X Y --frame FRAME_TOKEN [--wait-changed 1500]",
-      "when_to_use": "After reading the latest JPEG. Next token is data.screenshot.frame_token, not top-level data.frame_token."
+      "when_to_use": "After reading the latest JPEG when only one point is needed. Next token is data.screenshot.frame_token, not top-level data.frame_token."
+    },
+    {
+      "name": "chain",
+      "description": "Run 2-8 frame-bound gestures on the current JPEG without re-observing. wait-changed runs once after the last step.",
+      "usage": "adb-claw chain --normalized --frame FRAME_TOKEN --wait-changed 1500 tap X1 Y1 tap X2 Y2",
+      "when_to_use": "When this JPEG already shows every target (chess: piece then square). Do not chain a target that appears only after the first tap."
     },
     {
       "name": "long-press",
@@ -154,9 +160,10 @@
     {"file": "meituan.md", "app": "Meituan", "package": "com.sankuai.meituan"}
   ],
   "workflow_hints": {
-    "default_loop": "observe → open JPEG → tap/swipe/scroll --normalized --frame TOKEN --wait-changed → open data.screenshot.path. type/key/open then observe.",
+    "default_loop": "observe → open JPEG → tap|chain|swipe|scroll --normalized --frame TOKEN --wait-changed → open data.screenshot.path. type/key/open then observe. Chain when all targets are already on this JPEG.",
     "read_image": "JSON is only metadata. Open data.screenshot.path before every coordinate action.",
     "next_token": "After --wait-changed, the next token is data.screenshot.frame_token. Top-level data.frame_token is the frame just acted on.",
+    "chain": "When every next target is already visible on this JPEG, use chain with that frame_token. Do not tap --wait-changed and re-read between those steps. Do not chain a target that appears only after the first tap.",
     "image_only": "The only perception input is a JPEG file from observe or frame.latest. Do not request a UI tree.",
     "normalized_coords": "All model actions use a 1000x1000 (0-999) grid plus the latest frame_token. Tap the control center, not 500 500 unless that is the target. Bare pixels and unbound normalized actions are rejected.",
     "stale_frame": "STALE_FRAME means the frame action size no longer matches the live screen, or the token expired. Observe again.",

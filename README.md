@@ -132,6 +132,7 @@ adb-claw
 ├── screenshot [--file path] [--width px] [--max-pixels N]
 ├── pump [--daemon] | status | stop # latest-frame livestream (auto-started by observe)
 ├── tap <x> <y> --normalized --frame TOKEN [--wait-changed ms]
+├── chain --normalized --frame TOKEN tap X Y tap X Y [--wait-changed ms]
 ├── long-press <x> <y> --normalized --frame TOKEN
 ├── swipe <x1> <y1> <x2> <y2> --normalized --frame TOKEN
 ├── key <HOME|BACK|ENTER|...>
@@ -162,6 +163,9 @@ adb-claw observe --quality 60
 
 # Read the returned path, then use its token with the 0-999 grid.
 adb-claw tap --normalized 500 500 --frame FRAME_TOKEN --wait-changed 1500
+
+# Two targets already visible on this JPEG — do not re-observe between taps
+adb-claw chain --normalized --frame FRAME_TOKEN --wait-changed 1500 tap 180 720 tap 420 310
 
 adb-claw type "hello world"
 adb-claw type "王者荣耀"
@@ -276,13 +280,14 @@ Contributions welcome — see `skills/apps/README.md` for the profile spec.
 
 1. **Open the JPEG** — `observe` (or a `--wait-changed` result) returns `data.screenshot.path`. Look at that image before every tap.
 2. **Normalized taps** — `--normalized` 0–999 plus that frame's token. After `--wait-changed`, the next token is `data.screenshot.frame_token`.
-3. **Scroll, don't swipe** — `scroll down` over manual swipe math
-4. **Never sleep** — bind `--wait-changed` on the action; do not `sleep` then `observe`
-5. **Unicode is built in** — focus the field and `type "中文"`; prefer deep links when they reduce steps
-6. **Clear before type** — `clear-field` then `type`
-7. **Check App Profiles** — `app current`, then load `skills/apps/` before exploring
-8. **Stop** — goal screen, or login/captcha/payment/permission dialogs the user must answer
-9. **Error recovery** — `STALE_FRAME` means `observe` again. Same `hash + point` at most twice.
+3. **Chain visible steps** — if this JPEG already shows the next targets, `chain tap A tap B` once; do not re-observe between them
+4. **Scroll, don't swipe** — `scroll down` over manual swipe math
+5. **Never sleep** — bind `--wait-changed` on the action; do not `sleep` then `observe`
+6. **Unicode is built in** — focus the field and `type "中文"`; prefer deep links when they reduce steps
+7. **Clear before type** — `clear-field` then `type`
+8. **Check App Profiles** — `app current`, then load `skills/apps/` before exploring
+9. **Stop** — goal screen, or login/captcha/payment/permission dialogs the user must answer
+10. **Error recovery** — `STALE_FRAME` means `observe` again. Same `hash + point` at most twice.
 
 ## Actively Shipping
 

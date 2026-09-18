@@ -41,10 +41,13 @@ Agents always pass `--normalized` and `--frame TOKEN`. Bare coordinates are reje
 
 ```bash
 adb-claw tap --normalized X Y --frame TOKEN [--wait-changed 1500]
+adb-claw chain --normalized --frame TOKEN --wait-changed 1500 tap X1 Y1 tap X2 Y2
 adb-claw long-press --normalized X Y --frame TOKEN [--duration 2000] [--wait-changed 1500]
 adb-claw swipe --normalized X1 Y1 X2 Y2 --frame TOKEN [--duration 300] [--wait-changed 1500]
 adb-claw scroll {up|down|left|right} --frame TOKEN [--pages N] [--wait-changed 1500]
 ```
+
+`chain` maps 2–8 gestures (`tap`, `long-press`, `swipe`) onto one frame. `--wait-changed` runs once after the last step. `--gap-ms` (default 80) is the inject pause between gestures, not an agent sleep. Do not chain a target that is not visible on this JPEG.
 
 `--wait-changed` requires a bound frame. After it returns, the next token is `data.screenshot.frame_token`, not top-level `data.frame_token`.
 

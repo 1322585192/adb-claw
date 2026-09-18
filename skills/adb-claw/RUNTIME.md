@@ -28,7 +28,7 @@ Methods: `ping`, `frame.latest`, `frame.wait_after`, `act`, `device.info`, `clos
 
 Frames start at the device's native aspect (quality 60) and may drop to a 540px-wide uniform scale if they are stale. The session does not auto-upgrade.
 
-One-shot equivalent (no serve): `observe` → `tap --normalized X Y --frame TOKEN --wait-changed 1500` → read `data.screenshot.path`. Same stop/retry rules as [SKILL.md](SKILL.md).
+One-shot equivalent (no serve): `observe` → `tap` or `chain --normalized --frame TOKEN --wait-changed 1500` → read `data.screenshot.path`. Serve still sends one `act` per request this release. Same stop/retry rules as [SKILL.md](SKILL.md).
 
 ## Do not do this
 
