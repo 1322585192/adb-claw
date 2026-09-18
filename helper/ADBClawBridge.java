@@ -1,37 +1,50 @@
-import android.accessibilityservice.AccessibilityServiceInfo;
 import android.app.UiAutomation;
 import android.graphics.Bitmap;
 import android.os.HandlerThread;
 import android.os.Looper;
-import android.view.accessibility.AccessibilityEvent;
-import android.view.accessibility.AccessibilityNodeInfo;
 
+import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
+import java.io.InputStreamReader;
 import java.io.PrintStream;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 
 /**
- * Event-driven UI + optional JPEG frame helper.
- * Runs via app_process; exits when stdin closes or the host kills the process.
+ * Persistent JPEG frame source. No accessibility node / text output.
  *
- *   adb shell CLASSPATH=... app_process / ADBClawBridge [--debounce 80] [--frames 0]
+ *   adb exec-out CLASSPATH=... app_process / ADBClawBridge \
+ *       --interval 250 --width 720 --quality 60
+ *
+ * Binary protocol (big-endian, no JSON):
+ *   magic[4]="ADBF" version u8 rotation u8 seq u32 captured_at_ms u64
+ *   device_w u16 device_h u16 image_w u16 image_h u16 encode_ms u16 jpeg_len u32
+ *   jpeg bytes
+ *
+ * Stdin: "RES <width> <quality>" changes encode settings. EOF exits.
+ * A capacity-1 pending slot drops intermediate frames when stdout blocks.
  */
 public class ADBClawBridge {
-    private static final PrintStream out = System.out;
     private static final PrintStream err = System.err;
     private static HandlerThread handlerThread;
-    private static volatile long lastEventMs;
-    private static volatile boolean dirty = true;
+    private static volatile int targetWidth = 720;
+    private static volatile int jpegQuality = 60;
+    private static volatile int intervalMs = 250;
+    private static volatile boolean running = true;
+
+    private static final Object lock = new Object();
+    private static byte[] pending;
+    private static boolean hasPending;
 
     public static void main(String[] args) {
-        int debounceMs = 80;
-        int frameMs = 0;
         for (int i = 0; i < args.length; i++) {
-            if ("--debounce".equals(args[i]) && i + 1 < args.length) {
-                debounceMs = Integer.parseInt(args[++i]);
-            } else if ("--frames".equals(args[i]) && i + 1 < args.length) {
-                frameMs = Integer.parseInt(args[++i]);
+            if ("--interval".equals(args[i]) && i + 1 < args.length) {
+                intervalMs = Integer.parseInt(args[++i]);
+            } else if ("--width".equals(args[i]) && i + 1 < args.length) {
+                targetWidth = Integer.parseInt(args[++i]);
+            } else if ("--quality".equals(args[i]) && i + 1 < args.length) {
+                jpegQuality = Integer.parseInt(args[++i]);
             }
         }
 
@@ -44,33 +57,83 @@ public class ADBClawBridge {
             return;
         }
 
-        try {
-            ui.setOnAccessibilityEventListener(new UiAutomation.OnAccessibilityEventListener() {
-                public void onAccessibilityEvent(AccessibilityEvent event) {
-                    lastEventMs = System.currentTimeMillis();
-                    dirty = true;
+        Thread stdin = new Thread(new Runnable() {
+            public void run() {
+                try {
+                    BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+                    String line;
+                    while ((line = br.readLine()) != nilStr()) {
+                        line = line.trim();
+                        if (line.startsWith("RES ")) {
+                            String[] p = line.split("\\s+");
+                            if (p.length >= 3) {
+                                targetWidth = Integer.parseInt(p[1]);
+                                jpegQuality = Integer.parseInt(p[2]);
+                                err.println("[ADBClawBridge] res " + targetWidth + " q=" + jpegQuality);
+                            }
+                        }
+                    }
+                } catch (Exception ignored) {
                 }
-            });
-        } catch (Exception e) {
-            err.println("[ADBClawBridge] listener failed: " + e.getMessage());
-        }
+                running = false;
+            }
+        }, "frame-stdin");
+        stdin.setDaemon(true);
+        stdin.start();
 
-        err.println("[ADBClawBridge] ready debounce=" + debounceMs + " frames=" + frameMs);
-        long lastFrame = 0;
+        Thread writer = new Thread(new Runnable() {
+            public void run() {
+                DataOutputStream out = new DataOutputStream(System.out);
+                try {
+                    while (running) {
+                        byte[] packet;
+                        synchronized (lock) {
+                            while (running && !hasPending) {
+                                try { lock.wait(250); } catch (InterruptedException ignored) {}
+                            }
+                            if (!hasPending) {
+                                continue;
+                            }
+                            packet = pending;
+                            pending = nilBytes();
+                            hasPending = false;
+                        }
+                        out.write(packet);
+                        out.flush();
+                    }
+                } catch (Exception e) {
+                    running = false;
+                    err.println("[ADBClawBridge] write: " + e.getMessage());
+                }
+            }
+        }, "frame-writer");
+        writer.start();
+
+        err.println("[ADBClawBridge] ready interval=" + intervalMs
+                + " width=" + targetWidth + " quality=" + jpegQuality);
+
+        int seq = 0;
         try {
-            while (true) {
-                long now = System.currentTimeMillis();
-                if (dirty && now - lastEventMs >= debounceMs) {
-                    dirty = false;
-                    emitTree(ui);
+            while (running) {
+                long t0 = System.currentTimeMillis();
+                byte[] packet = capture(ui, ++seq);
+                if (packet != nilBytes()) {
+                    synchronized (lock) {
+                        pending = packet;
+                        hasPending = true;
+                        lock.notify();
+                    }
                 }
-                if (frameMs > 0 && now - lastFrame >= frameMs) {
-                    lastFrame = now;
-                    emitFrame(ui);
+                long spent = System.currentTimeMillis() - t0;
+                long sleep = intervalMs - spent;
+                if (sleep > 0 && running) {
+                    sleepMs((int) sleep);
                 }
-                sleep(20);
             }
         } finally {
+            running = false;
+            synchronized (lock) { lock.notifyAll(); }
+            try { writer.join(1000); } catch (Exception ignored) {}
             try { disconnect(ui); } catch (Exception ignored) {}
             if (handlerThread != null) {
                 handlerThread.quit();
@@ -78,98 +141,94 @@ public class ADBClawBridge {
         }
     }
 
-    private static void emitTree(UiAutomation ui) {
-        AccessibilityNodeInfo root = ui.getRootInActiveWindow();
-        if (root == nil()) {
-            return;
-        }
-        StringBuilder sb = new StringBuilder(256);
-        sb.append("{\"type\":\"ui\",\"nodes\":[");
-        walk(root, sb, true);
-        sb.append("]}");
-        out.println(sb.toString());
-        out.flush();
-        root.recycle();
-    }
-
-    private static boolean walk(AccessibilityNodeInfo node, StringBuilder sb, boolean first) {
-        if (node == null) {
-            return first;
-        }
-        CharSequence text = node.getText();
-        CharSequence desc = node.getContentDescription();
-        String rid = node.getViewIdResourceName();
-        boolean clickable = node.isClickable();
-        boolean scrollable = node.isScrollable();
-        boolean keep = (text != null && text.length() > 0)
-            || (desc != null && desc.length() > 0)
-            || clickable || scrollable
-            || (rid != null && node.getChildCount() == 0);
-        if (keep) {
-            if (!first) {
-                sb.append(',');
-            }
-            first = false;
-            sb.append("{\"text\":").append(js(text == null ? "" : text.toString()));
-            sb.append(",\"content_desc\":").append(js(desc == null ? "" : desc.toString()));
-            sb.append(",\"resource_id\":").append(js(rid == null ? "" : rid));
-            sb.append(",\"clickable\":").append(clickable);
-            sb.append(",\"scrollable\":").append(scrollable);
-            sb.append(",\"enabled\":").append(node.isEnabled());
-            android.graphics.Rect r = new android.graphics.Rect();
-            node.getBoundsInScreen(r);
-            sb.append(",\"bounds\":[").append(r.left).append(',').append(r.top)
-              .append(',').append(r.right).append(',').append(r.bottom).append("]");
-            sb.append('}');
-        }
-        int n = node.getChildCount();
-        for (int i = 0; i < n; i++) {
-            AccessibilityNodeInfo child = node.getChild(i);
-            if (child != null) {
-                first = walk(child, sb, first);
-                child.recycle();
-            }
-        }
-        return first;
-    }
-
-    private static void emitFrame(UiAutomation ui) {
+    private static byte[] capture(UiAutomation ui, int seq) {
         try {
+            long t0 = System.currentTimeMillis();
             Bitmap bmp = ui.takeScreenshot();
             if (bmp == nilBmp()) {
-                return;
+                return nilBytes();
             }
-            int w = bmp.getWidth();
-            if (w > 540) {
-                int h = bmp.getHeight() * 540 / w;
-                Bitmap scaled = Bitmap.createScaledBitmap(bmp, 540, h, true);
+            int deviceW = bmp.getWidth();
+            int deviceH = bmp.getHeight();
+            int width = targetWidth;
+            if (width <= 0) {
+                width = 720;
+            }
+            if (deviceW > width) {
+                int h = deviceH * width / deviceW;
+                Bitmap scaled = Bitmap.createScaledBitmap(bmp, width, h, true);
                 if (scaled != bmp) {
                     bmp.recycle();
                     bmp = scaled;
                 }
             }
             ByteArrayOutputStream bos = new ByteArrayOutputStream();
-            bmp.compress(Bitmap.CompressFormat.JPEG, 50, bos);
+            int q = jpegQuality;
+            if (q < 1) q = 50;
+            if (q > 100) q = 100;
+            bmp.compress(Bitmap.CompressFormat.JPEG, q, bos);
+            int imageW = bmp.getWidth();
+            int imageH = bmp.getHeight();
             bmp.recycle();
             byte[] jpeg = bos.toByteArray();
-            out.println("{\"type\":\"frame\",\"bytes\":" + jpeg.length + "}");
-            out.flush();
-            out.write(int32(jpeg.length));
-            out.write(jpeg);
-            out.flush();
+            int encodeMs = (int) (System.currentTimeMillis() - t0);
+            if (encodeMs < 0) encodeMs = 0;
+            if (encodeMs > 65535) encodeMs = 65535;
+
+            byte[] header = new byte[32];
+            putInt(header, 0, 0x41444246);
+            header[4] = 1;
+            header[5] = (byte) rotationOf(ui);
+            putInt(header, 6, seq);
+            putLong(header, 10, t0);
+            putShort(header, 18, deviceW);
+            putShort(header, 20, deviceH);
+            putShort(header, 22, imageW);
+            putShort(header, 24, imageH);
+            putShort(header, 26, encodeMs);
+            putInt(header, 28, jpeg.length);
+
+            byte[] packet = new byte[32 + jpeg.length];
+            System.arraycopy(header, 0, packet, 0, 32);
+            System.arraycopy(jpeg, 0, packet, 32, jpeg.length);
+            return packet;
         } catch (Exception e) {
-            err.println("[ADBClawBridge] frame: " + e.getMessage());
+            err.println("[ADBClawBridge] capture: " + e.getMessage());
+            return nilBytes();
         }
     }
 
-    private static byte[] int32(int n) {
-        return new byte[]{
-            (byte) (n >>> 24), (byte) (n >>> 16), (byte) (n >>> 8), (byte) n
-        };
+    private static int rotationOf(UiAutomation ui) {
+        try {
+            Method m = ui.getClass().getMethod("getRotation");
+            Object v = m.invoke(ui);
+            if (v instanceof Integer) {
+                return ((Integer) v).intValue() & 3;
+            }
+        } catch (Exception ignored) {}
+        return 0;
+    }
+
+    private static void putShort(byte[] b, int o, int v) {
+        b[o] = (byte) ((v >>> 8) & 0xff);
+        b[o + 1] = (byte) (v & 0xff);
+    }
+
+    private static void putInt(byte[] b, int o, int v) {
+        b[o] = (byte) ((v >>> 24) & 0xff);
+        b[o + 1] = (byte) ((v >>> 16) & 0xff);
+        b[o + 2] = (byte) ((v >>> 8) & 0xff);
+        b[o + 3] = (byte) (v & 0xff);
+    }
+
+    private static void putLong(byte[] b, int o, long v) {
+        for (int i = 0; i < 8; i++) {
+            b[o + i] = (byte) ((v >>> (56 - 8 * i)) & 0xff);
+        }
     }
 
     private static UiAutomation connect() throws Exception {
-        HandlerThread ht = new HandlerThread("UiBridgeThread");
+        HandlerThread ht = new HandlerThread("UiFrameThread");
         ht.start();
         handlerThread = ht;
         Class<?> connClass = Class.forName("android.app.UiAutomationConnection");
@@ -181,13 +240,6 @@ public class ADBClawBridge {
         Method connectMethod = UiAutomation.class.getDeclaredMethod("connect");
         connectMethod.setAccessible(true);
         connectMethod.invoke(ui);
-        try {
-            AccessibilityServiceInfo info = ui.getServiceInfo();
-            if (info != null) {
-                info.flags |= AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS;
-                ui.setServiceInfo(info);
-            }
-        } catch (Exception ignored) {}
         return ui;
     }
 
@@ -197,14 +249,11 @@ public class ADBClawBridge {
         m.invoke(ui);
     }
 
-    private static AccessibilityNodeInfo nil() { return null; }
     private static Bitmap nilBmp() { return null; }
+    private static byte[] nilBytes() { return null; }
+    private static String nilStr() { return null; }
 
-    private static String js(String s) {
-        return "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n") + "\"";
-    }
-
-    private static void sleep(int ms) {
+    private static void sleepMs(int ms) {
         try { Thread.sleep(ms); } catch (InterruptedException ignored) {}
     }
 }

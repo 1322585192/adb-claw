@@ -1,107 +1,83 @@
 {
   "name": "adb-claw",
-  "version": "1.7.0",
-  "description": "Android device control CLI for AI agent automation. Realtime path: observe once, act from state_id/center, never re-dump on tap --index.",
+  "version": "2.0.0",
+  "description": "Android device control CLI for Gemini 3.8 Flash Computer Use. Perception is a JPEG frame only. Actions use a 0-999 normalized coordinate grid.",
   "capabilities": {
     "input_methods": ["adb_input"],
     "stealth_levels": ["off"],
     "humanize": false,
     "unicode_input": false,
     "persistent_session": true,
-    "snapshot_actions": true
+    "image_only": true,
+    "normalized_coords": true
+  },
+  "model": {
+    "name": "gemini-3.8-flash",
+    "thinking_level": "low",
+    "media_resolution": "medium",
+    "image": "inline JPEG from frame path, never base64 in tool JSON"
   },
   "tools": [
     {
-      "name": "observe",
-      "description": "Capture screenshot + UI tree. Writes state_id snapshot. JSON never includes image bytes. Tap using UI tree device pixels.",
-      "usage": "adb-claw observe [--width 540] [--quality 50] [--capture auto|stream|pull] [--ui-mode full|compact|interactive|realtime] [--compressed] [--skip-screenshot] [--profile] [--file path]",
-      "returns": "state_id, screenshot.path + sizes/scale, UI elements with index/handle/id/text/bounds/center, optional profile",
-      "when_to_use": "Before deciding an action. After an action only when the page may have changed. Read the screenshot file; do not paste JSON into notes."
+      "name": "take_screenshot",
+      "description": "Read the latest screen JPEG. Never looks at UI text nodes.",
+      "usage": "adb-claw observe --width 720 --quality 60   OR serve frame.latest",
+      "returns": "path, frame_seq (serve), device/image size, scale, frame_age_ms",
+      "when_to_use": "Before deciding an action. Read the image file. Do not paste JSON."
     },
     {
-      "name": "screenshot",
-      "description": "Capture a screenshot of the device screen.",
-      "usage": "adb-claw screenshot [-f file.jpg] [--capture auto|stream|pull] [--format jpeg|png] [--quality 70] [--width px] [--profile]",
-      "returns": "screenshot.path plus device/image size, scale, capture mode",
-      "when_to_use": "When you only need the visual state without UI element data."
-    },
-    {
-      "name": "tap",
-      "description": "Tap a coordinate or a cached UI element. --index/--id/--text use the last observe snapshot and do not dump unless --refresh.",
-      "usage": "adb-claw tap {X Y | --index N | --id RESOURCE_ID | --text TEXT} [--refresh]",
-      "when_to_use": "Prefer coordinates or last-observe index. --refresh only when the snapshot is missing or stale."
+      "name": "click",
+      "description": "Tap using Gemini Computer Use 0-999 coordinates.",
+      "usage": "adb-claw tap --normalized X Y   OR serve act {action:tap, frame_seq, x, y}",
+      "when_to_use": "After reading the latest frame. Always pass the frame_seq you saw."
     },
     {
       "name": "long_press",
-      "description": "Long press a coordinate or cached UI element.",
-      "usage": "adb-claw long-press {X Y | --index N | --id ID | --text TEXT} [--duration 1000] [--refresh]",
-      "when_to_use": "For context menus or long-press actions."
-    },
-    {
-      "name": "swipe",
-      "description": "Swipe from one point to another.",
-      "usage": "adb-claw swipe X1 Y1 X2 Y2 [--duration 300]",
-      "when_to_use": "To scroll content or dismiss UI."
+      "description": "Long press using 0-999 coordinates.",
+      "usage": "adb-claw long-press --normalized X Y [--duration 1000]",
+      "when_to_use": "For context menus or press-and-hold controls."
     },
     {
       "name": "scroll",
-      "description": "Smart scroll using screen or cached element bounds.",
-      "usage": "adb-claw scroll {up|down|left|right} [--pages N] [--index N] [--refresh]",
-      "when_to_use": "Prefer this over raw swipe for page navigation."
+      "description": "Scroll the screen. Prefer direction pages; swipe also accepts 0-999 endpoints.",
+      "usage": "adb-claw scroll {up|down|left|right} [--pages N]   OR adb-claw swipe --normalized X1 Y1 X2 Y2",
+      "when_to_use": "To reveal more content after reading the current frame."
     },
     {
       "name": "type",
-      "description": "Input ASCII text into the focused field.",
+      "description": "Type ASCII text into the focused field.",
       "usage": "adb-claw type TEXT",
-      "when_to_use": "After tapping an input field to focus it."
+      "when_to_use": "After clicking an input field to focus it."
     },
     {
       "name": "key",
       "description": "Press a system key.",
       "usage": "adb-claw key {HOME|BACK|ENTER|TAB|DEL|POWER|VOLUME_UP|VOLUME_DOWN}",
-      "when_to_use": "To navigate back, go home, confirm input, or control device."
+      "when_to_use": "Back, home, confirm, or device keys."
     },
     {
-      "name": "clear_field",
-      "description": "Clear the focused input field. Optional cached element tap first.",
-      "usage": "adb-claw clear-field [--index N | --id ID | --text TEXT] [--refresh]",
-      "when_to_use": "Before typing into a field that already has text."
-    },
-    {
-      "name": "open",
-      "description": "Open a URI or app deep link.",
-      "usage": "adb-claw open URI",
-      "when_to_use": "To jump to a screen or pass CJK text as a URL parameter."
-    },
-    {
-      "name": "wait",
-      "description": "Wait for a UI element or activity to appear or disappear.",
-      "usage": "adb-claw wait {--text TEXT | --id ID | --activity NAME} [--gone] [--timeout ms]",
-      "when_to_use": "Instead of polling observe after a navigation."
-    },
-    {
-      "name": "monitor",
-      "description": "Stream or collect UI text via accessibility. Host owns --duration.",
-      "usage": "adb-claw monitor [--duration ms] [--interval ms] [--stream] [--profile]",
-      "when_to_use": "Live streams / video pages where uiautomator dump hangs."
+      "name": "open_app",
+      "description": "Launch an app or open a deep link / URL.",
+      "usage": "adb-claw app launch PACKAGE   OR adb-claw open URI",
+      "when_to_use": "To jump to an app or pass CJK text as a URL parameter."
     },
     {
       "name": "serve",
-      "description": "Persistent JSONL session. observe returns state_id; act uses it and never re-dumps.",
-      "usage": "adb-claw serve --stdio [--ui-mode realtime] [--capture auto] [--width 540]",
-      "when_to_use": "Flash/Live adapters that need a long-lived low-latency control socket."
+      "description": "Persistent JSONL session: frame.latest / frame.wait_after / act / device.info.",
+      "usage": "adb-claw serve --stdio [--width 720]",
+      "when_to_use": "Gemini 3.8 Flash adapters. Image bytes stay on disk; JSON only has path + frame_seq."
+    },
+    {
+      "name": "wait",
+      "description": "Wait for an activity or a visual screen change. No text locators.",
+      "usage": "adb-claw wait {--activity NAME | --changed} [--timeout ms]",
+      "when_to_use": "After navigation, instead of a fixed sleep."
     },
     {
       "name": "bench",
-      "description": "Measure observe/dump/screenshot/tap p50/p95 on a connected device.",
-      "usage": "adb-claw bench [--rounds 5] [--width 540]",
-      "when_to_use": "To collect a repeatable latency baseline."
-    },
-    {
-      "name": "app_launch",
-      "description": "Launch an app by package name.",
-      "usage": "adb-claw app launch PACKAGE_NAME",
-      "when_to_use": "To open a specific app."
+      "description": "Measure first frame, screenshot, latest write, and normalized tap latency.",
+      "usage": "adb-claw bench [--rounds 5] [--width 720]",
+      "when_to_use": "To collect a repeatable image-only latency baseline."
     },
     {
       "name": "app_current",
@@ -114,27 +90,14 @@
       "description": "Get device details: model, screen size, Android version.",
       "usage": "adb-claw device info",
       "when_to_use": "At the start of a session."
-    },
-    {
-      "name": "ui_tree",
-      "description": "Dump the indexed UI tree and refresh the action snapshot.",
-      "usage": "adb-claw ui tree [--ui-mode realtime] [--compressed] [--profile]",
-      "when_to_use": "When you need UI structure without a screenshot."
-    },
-    {
-      "name": "live_cart",
-      "description": "Grab products from a Douyin live shopping cart.",
-      "usage": "adb-claw live cart [--count 10]",
-      "when_to_use": "When viewing a Douyin live stream with a shopping cart."
     }
   ],
   "workflow_hints": {
-    "observe_first": "Run observe once, then act from data.ui.elements[].center or --index against that snapshot. Do not re-observe after every tap unless the page changed.",
-    "prefer_center_or_snapshot": "tap X Y from center is fastest. tap --index uses the last snapshot and fails with STALE_STATE if it expired. Never tap screenshot-image pixels.",
-    "avoid_refresh": "Do not pass --refresh unless observe failed or the snapshot expired.",
-    "type_after_focus": "Tap an input field first, then type.",
-    "scroll_pattern": "Prefer scroll over swipe. Observe after scrolling.",
-    "serve_for_realtime": "For Flash/Live loops use adb-claw serve and act(state_id, handle).",
-    "error_handling": "STALE_STATE means re-observe. Do not guess a new index."
+    "image_only": "The only perception input is a JPEG file from observe or frame.latest. Do not request a UI tree.",
+    "normalized_coords": "All model actions use a 1000x1000 (0-999) grid. adb-claw maps them onto the frame's device_width/device_height.",
+    "stale_frame": "STALE_FRAME means the screen changed or the frame aged out. Call frame.latest again before acting.",
+    "wait_after": "After a click, use frame.wait_after instead of sleep.",
+    "media": "Adapter default: gemini-3.8-flash, thinking_level=low, media_resolution=medium, inline JPEG. Upgrade to high only for dense small text.",
+    "cjk": "type is ASCII only. Use open with a deep link for Chinese/Japanese/Korean."
   }
 }

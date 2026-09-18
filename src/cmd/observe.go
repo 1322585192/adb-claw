@@ -14,28 +14,20 @@ var (
 	observeQuality     int
 	observeFile        string
 	observeCaptureMode string
-	observeUIMode      string
-	observeCompressed  bool
 	observeProfile     bool
-	observeSkipImage   bool
 )
 
 var observeCmd = &cobra.Command{
 	Use:   "observe",
-	Short: "Capture screenshot + UI tree",
-	Long: `Captures a screenshot and UI element tree in parallel, returning both in a single response.
+	Short: "Capture a screenshot frame for visual analysis",
+	Long: `Captures a JPEG screenshot and writes it to a file.
 
-The screenshot is JPEG-compressed and written to a file. JSON never includes image
-bytes or base64 — only the file path and size/scale metadata. UI tree bounds/center
-stay in device pixels; never tap using preview-image pixels even if --width scaled
-the screenshot.
-
-A successful observe writes a versioned snapshot (data.state_id). Later
-tap/long-press/scroll/clear-field --index/--id/--text reuse that snapshot
-instead of dumping the UI tree again.`,
+JSON never includes image bytes or base64 — only the file path and size/scale
+metadata. Read data.screenshot.path. Act with --normalized 0-999 coordinates
+mapped to data.screenshot.device_width / device_height.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		start := time.Now()
-		writer.Verbose("starting observe (screenshot + ui tree in parallel)")
+		writer.Verbose("capturing screenshot frame")
 
 		format := strings.ToLower(observeFormat)
 		if format != "jpeg" && format != "png" {
@@ -46,20 +38,17 @@ instead of dumping the UI tree again.`,
 		}
 
 		result := observe.Observe(client, observe.ObserveOptions{
-			MaxWidth:   observeMaxWidth,
-			Format:     format,
-			Quality:    observeQuality,
-			Path:       observeFile,
-			Mode:       observe.CaptureMode(observeCaptureMode),
-			UIMode:     observe.UIMode(observeUIMode),
-			Compressed: observeCompressed,
-			Profile:    observeProfile,
-			SkipImage:  observeSkipImage,
+			MaxWidth: observeMaxWidth,
+			Format:   format,
+			Quality:  observeQuality,
+			Path:     observeFile,
+			Mode:     observe.CaptureMode(observeCaptureMode),
+			Profile:  observeProfile,
 		})
 
-		if result.Screenshot == nil && result.UI == nil {
+		if result.Screenshot == nil {
 			writer.Fail("observe", "OBSERVE_FAILED",
-				"Both screenshot and UI tree failed",
+				"Screenshot failed",
 				"Check device connection: adb-claw device list", start)
 			return nil
 		}
@@ -119,21 +108,18 @@ var screenshotCmd = &cobra.Command{
 
 func init() {
 	screenshotCmd.Flags().StringVarP(&screenshotOutput, "file", "f", "", "Screenshot output path (default: $TMPDIR/adb-claw-screenshot.jpg)")
-	screenshotCmd.Flags().IntVar(&screenshotMaxWidth, "width", 0, "Max image width in pixels (0 = original size; tap coords stay device pixels)")
+	screenshotCmd.Flags().IntVar(&screenshotMaxWidth, "width", 0, "Max image width in pixels (0 = original size)")
 	screenshotCmd.Flags().StringVar(&screenshotFormat, "format", "jpeg", "Image format: jpeg | png")
 	screenshotCmd.Flags().IntVar(&screenshotQuality, "quality", observe.DefaultJPEGQuality, "JPEG quality 1-100")
 	screenshotCmd.Flags().StringVar(&screenshotCaptureMode, "capture", "auto", "Capture mode: auto | stream | pull")
 	screenshotCmd.Flags().BoolVar(&screenshotProfile, "profile", false, "Include segmented capture timing")
 
-	observeCmd.Flags().IntVar(&observeMaxWidth, "width", 0, "Max screenshot preview width in pixels (0 = original size; does not change tap coordinates)")
+	observeCmd.Flags().IntVar(&observeMaxWidth, "width", observe.DefaultObserveWidth, "Max screenshot width (default 720)")
 	observeCmd.Flags().StringVar(&observeFormat, "format", "jpeg", "Screenshot format: jpeg | png")
 	observeCmd.Flags().IntVar(&observeQuality, "quality", observe.DefaultJPEGQuality, "JPEG quality 1-100")
 	observeCmd.Flags().StringVar(&observeFile, "file", "", "Screenshot output path (default: $TMPDIR/adb-claw-observe.jpg)")
 	observeCmd.Flags().StringVar(&observeCaptureMode, "capture", "auto", "Capture mode: auto | stream | pull")
-	observeCmd.Flags().StringVar(&observeUIMode, "ui-mode", "full", "UI tree profile: full | compact | interactive | realtime")
-	observeCmd.Flags().BoolVar(&observeCompressed, "compressed", false, "Use uiautomator dump --compressed")
 	observeCmd.Flags().BoolVar(&observeProfile, "profile", false, "Include segmented observe timing")
-	observeCmd.Flags().BoolVar(&observeSkipImage, "skip-screenshot", false, "Skip screenshot capture and only dump the UI tree")
 
 	rootCmd.AddCommand(observeCmd)
 	rootCmd.AddCommand(screenshotCmd)

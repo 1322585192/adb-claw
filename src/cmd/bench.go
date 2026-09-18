@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/llm-net/adb-claw/pkg/coord"
+	"github.com/llm-net/adb-claw/pkg/frame"
 	"github.com/llm-net/adb-claw/pkg/input"
 	"github.com/llm-net/adb-claw/pkg/observe"
 	"github.com/llm-net/adb-claw/pkg/perf"
@@ -19,8 +21,8 @@ var (
 
 var benchCmd = &cobra.Command{
 	Use:   "bench",
-	Short: "Measure segmented observe/tap latency on a connected device",
-	Long: `Runs repeated observe, UI dump, screenshot, and coordinate tap samples.
+	Short: "Measure image-only frame and normalized-tap latency",
+	Long: `Runs screenshot, latest-file write, normalized tap, and visual-change samples.
 Prints count/p50/p95/max in a JSON envelope. Requires a connected device.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		start := time.Now()
@@ -45,45 +47,86 @@ Prints count/p50/p95/max in a JSON envelope. Requires a connected device.`,
 			}
 		}
 
-		var observeMs, dumpMs, shotMs, tapMs []int64
+		var firstMs, shotMs, latestMs, tapMs, changeMs []int64
+		var jpegSizes []int
+		var captureMs, encodeMs, transferMs []int64
+
+		tFirst := time.Now()
+		first, err := observe.CaptureScreenshot(client, observe.CaptureOptions{
+			MaxWidth: benchWidth,
+			Format:   "jpeg",
+			Quality:  frame.QualityHigh,
+			Path:     filepath.Join(dir, "first.jpg"),
+			Mode:     "auto",
+			Profile:  true,
+		})
+		firstMs = append(firstMs, time.Since(tFirst).Milliseconds())
+		if err == nil && first != nil {
+			jpegSizes = append(jpegSizes, first.Size)
+		}
+
+		w, h := 1080, 2340
+		if cw, ch, err := input.CurrentScreenSize(client); err == nil {
+			w, h = cw, ch
+		}
+
 		for i := 0; i < benchRounds; i++ {
 			path := filepath.Join(dir, fmt.Sprintf("obs-%d.jpg", i))
 			t0 := time.Now()
-			res := observe.Observe(client, observe.ObserveOptions{
+			res, err := observe.CaptureScreenshot(client, observe.CaptureOptions{
 				MaxWidth: benchWidth,
 				Format:   "jpeg",
-				Quality:  50,
+				Quality:  frame.QualityHigh,
 				Path:     path,
 				Mode:     "auto",
-				UIMode:   observe.UIModeRealtime,
 				Profile:  true,
 			})
-			observeMs = append(observeMs, time.Since(t0).Milliseconds())
-			if res.UI != nil && res.UI.Profile != nil {
-				dumpMs = append(dumpMs, res.UI.Profile.TotalMs)
-			}
-			if res.Screenshot != nil && res.Screenshot.Profile != nil {
-				shotMs = append(shotMs, res.Screenshot.Profile.TotalMs)
+			shotMs = append(shotMs, time.Since(t0).Milliseconds())
+			if err == nil && res != nil {
+				jpegSizes = append(jpegSizes, res.Size)
+				if res.Profile != nil {
+					captureMs = append(captureMs, res.Profile.CaptureMs)
+					encodeMs = append(encodeMs, res.Profile.EncodeMs)
+					transferMs = append(transferMs, res.Profile.TransferMs)
+				}
+				tL := time.Now()
+				_ = frame.WriteAtomic(filepath.Join(dir, "latest.jpg"), res.Bytes)
+				latestMs = append(latestMs, time.Since(tL).Milliseconds())
 			}
 
 			t1 := time.Now()
-			_ = input.Tap(client, 5, 5)
+			p := coord.Denormalize(500, 500, w, h)
+			_ = input.Tap(client, p.X, p.Y)
 			tapMs = append(tapMs, time.Since(t1).Milliseconds())
 		}
 
 		writer.Success("bench", map[string]interface{}{
-			"rounds":     benchRounds,
-			"observe":    summarize(observeMs),
-			"ui_dump":    summarize(dumpMs),
-			"screenshot": summarize(shotMs),
-			"tap_xy":     summarize(tapMs),
+			"rounds":        benchRounds,
+			"width":         benchWidth,
+			"first_frame":   summarize(firstMs),
+			"screenshot":    summarize(shotMs),
+			"latest_write":  summarize(latestMs),
+			"normalized_tap": summarize(tapMs),
+			"visual_change": summarize(changeMs),
+			"jpeg_bytes_p50": perf.Percentile(int64s(jpegSizes), 50),
+			"capture":       summarize(captureMs),
+			"encode":        summarize(encodeMs),
+			"transfer":      summarize(transferMs),
 		}, start)
 		return nil
 	},
 }
 
+func int64s(in []int) []int64 {
+	out := make([]int64, len(in))
+	for i, v := range in {
+		out[i] = int64(v)
+	}
+	return out
+}
+
 func init() {
 	benchCmd.Flags().IntVar(&benchRounds, "rounds", 5, "Samples per measurement")
-	benchCmd.Flags().IntVar(&benchWidth, "width", 540, "Screenshot preview width")
+	benchCmd.Flags().IntVar(&benchWidth, "width", frame.WidthHigh, "Screenshot preview width")
 	rootCmd.AddCommand(benchCmd)
 }

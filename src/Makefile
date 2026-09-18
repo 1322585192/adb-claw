@@ -5,8 +5,8 @@ VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev
 GO := go
 LDFLAGS := -ldflags "-X $(MODULE)/cmd.Version=$(VERSION)"
 
-DEX_SRC := ../helper/ADBClawMonitor.java
-DEX_DST := pkg/monitor/classes.dex
+DEX_SRC := ../helper/ADBClawBridge.java
+DEX_DST := pkg/frame/classes.dex
 AUDIO_DEX_SRC := ../helper/ADBClawAudio.java
 AUDIO_DEX_DST := pkg/audio/classes.dex
 JAVAC := javac
@@ -32,9 +32,9 @@ clean:
 	rm -rf $(BUILD_DIR)
 
 dex:
-	@echo "Building monitor DEX..."
+	@echo "Building frame DEX..."
 	@mkdir -p /tmp/adbclaw-dex
-	$(JAVAC) --release 11 -classpath $(ANDROID_JAR) -d /tmp/adbclaw-dex $(DEX_SRC) ../helper/ADBClawBridge.java
+	$(JAVAC) --release 11 -classpath $(ANDROID_JAR) -d /tmp/adbclaw-dex $(DEX_SRC)
 	$(D8) --output /tmp/adbclaw-dex /tmp/adbclaw-dex/*.class
 	cp /tmp/adbclaw-dex/classes.dex $(DEX_DST)
 	@rm -rf /tmp/adbclaw-dex

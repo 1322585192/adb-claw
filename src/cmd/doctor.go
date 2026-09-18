@@ -33,13 +33,10 @@ var doctorCmd = &cobra.Command{
 
 		// Only run device-specific checks if a device is connected
 		if deviceCheck.Status == "ok" {
-			// 3. Check screencap
+			// 3. Check screencap (image-only fallback)
 			checks = append(checks, checkScreencap())
 
-			// 4. Check uiautomator
-			checks = append(checks, checkUIAutomator())
-
-			// 5. Check input command
+			// 4. Check input command
 			checks = append(checks, checkInput())
 		}
 
@@ -154,31 +151,6 @@ func checkScreencap() CheckResult {
 		Name:    "screencap",
 		Status:  "ok",
 		Message: "screencap available",
-		Detail:  path,
-	}
-}
-
-func checkUIAutomator() CheckResult {
-	result, err := client.Shell("which", "uiautomator")
-	if err != nil {
-		return CheckResult{
-			Name:    "uiautomator",
-			Status:  "error",
-			Message: "uiautomator check failed: " + err.Error(),
-		}
-	}
-	path := strings.TrimSpace(result.Stdout)
-	if path == "" {
-		return CheckResult{
-			Name:    "uiautomator",
-			Status:  "error",
-			Message: "uiautomator not found on device",
-		}
-	}
-	return CheckResult{
-		Name:    "uiautomator",
-		Status:  "ok",
-		Message: "uiautomator available",
 		Detail:  path,
 	}
 }

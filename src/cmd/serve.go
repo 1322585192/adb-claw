@@ -4,48 +4,47 @@ import (
 	"os"
 	"time"
 
-	"github.com/llm-net/adb-claw/pkg/observe"
+	"github.com/llm-net/adb-claw/pkg/frame"
 	"github.com/llm-net/adb-claw/pkg/server"
 	"github.com/spf13/cobra"
 )
 
 var (
-	serveStdio      bool
-	serveUIMode     string
-	serveCapture    string
-	serveCompressed bool
-	serveWidth      int
-	serveQuality    int
+	serveStdio     bool
+	serveWidth     int
+	serveQuality   int
+	serveForceHigh bool
 )
 
 var serveCmd = &cobra.Command{
 	Use:   "serve",
 	Args:  cobra.NoArgs,
-	Short: "Persistent JSONL control session for low-latency agents",
+	Short: "Persistent JSONL frame + normalized-action session",
 	Long: `Reads JSONL requests from stdin and writes JSONL responses to stdout.
 
 Methods:
   ping
-  observe  {width, quality, capture, ui_mode, compressed, skip_screenshot, profile}
-  act      {state_id, action, index|handle|id|text|x,y}
+  frame.latest
+  frame.wait_after  {frame_seq, timeout_ms}
+  act               {frame_seq, action, x, y, ...}   // 0-999 normalized
+  device.info
   close
 
-observe returns a state_id. act uses that snapshot and never re-dumps the UI tree.
-A stale or missing state_id fails with STALE_STATE instead of clicking the wrong node.`,
+frame.latest writes latest.jpg and returns frame_seq. act maps 0-999 onto
+the device pixels of that frame. A stale or changed frame returns STALE_FRAME.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		_ = serveStdio
 		srv := &server.Server{
 			Cmd:    client,
+			Client: client,
 			Serial: flagSerial,
 			In:     os.Stdin,
 			Out:    os.Stdout,
 			Options: server.Options{
-				CaptureMode: observe.CaptureMode(serveCapture),
-				UIMode:      observe.UIMode(serveUIMode),
-				Compressed:  serveCompressed,
-				MaxWidth:    serveWidth,
-				Quality:     serveQuality,
-				MaxAge:      observe.DefaultSnapshotMaxAge,
+				Width:     serveWidth,
+				Quality:   serveQuality,
+				MaxAge:    server.DefaultMaxFrameAge,
+				ForceHigh: serveForceHigh,
 			},
 		}
 		if err := srv.Run(); err != nil {
@@ -58,10 +57,8 @@ A stale or missing state_id fails with STALE_STATE instead of clicking the wrong
 
 func init() {
 	serveCmd.Flags().BoolVar(&serveStdio, "stdio", true, "Read JSONL from stdin and write JSONL to stdout")
-	serveCmd.Flags().StringVar(&serveUIMode, "ui-mode", "realtime", "Default UI profile: full | compact | interactive | realtime")
-	serveCmd.Flags().StringVar(&serveCapture, "capture", "auto", "Default screenshot capture mode")
-	serveCmd.Flags().BoolVar(&serveCompressed, "compressed", false, "Default to compressed UI dump")
-	serveCmd.Flags().IntVar(&serveWidth, "width", 540, "Default screenshot preview width")
-	serveCmd.Flags().IntVar(&serveQuality, "quality", observe.DefaultJPEGQuality, "Default JPEG quality")
+	serveCmd.Flags().IntVar(&serveWidth, "width", frame.WidthHigh, "Initial frame width (720 or 540)")
+	serveCmd.Flags().IntVar(&serveQuality, "quality", frame.QualityHigh, "Initial JPEG quality")
+	serveCmd.Flags().BoolVar(&serveForceHigh, "resolution-720", false, "Force a new session to start at 720p")
 	rootCmd.AddCommand(serveCmd)
 }

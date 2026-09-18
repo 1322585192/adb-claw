@@ -58,16 +58,15 @@
 | 截屏体积优化 | `observe` 默认 JPEG 文件 + compact UI 树；坐标保持设备像素 | ✅ |
 | UI dump 单次 shell + 可选 compressed | 合并 dump/cat/rm | ✅ |
 | 远程截图 pull mode | TCP/SSH ADB 走设备落盘 + adb pull | ✅ |
-| 索引动作快照 | tap --index 使用 observe state_id，禁止静默重 dump | ✅ |
-| serve JSONL | 持久会话 + STALE_STATE | ✅ |
-| observe 重试机制 | `uiautomator dump` 失败时自动重试 |
+| 索引动作快照 | v1：tap --index 使用 observe 快照 | ✅ 后被 v2 删除 |
+| serve JSONL | v1：state_id；v2：frame_seq + 归一化坐标 | ✅ |
+| 图片-only 帧源 | 删除 UI dump，720/540 自适应 JPEG，serve frame.latest/act | ✅ |
 | `device connect` | 无线 ADB 连接（`adb tcpip` + `adb connect`） |
 
 ### 测试覆盖
 
-- 补充 `pkg/observe/uitree_test.go` 的边界情况（空 XML、超大 UI 树）
 - 补充 `pkg/input/adbinput_test.go` 的特殊字符转义测试
-- 集成测试：真机上跑通完整交互循环
+- 集成测试：真机上跑通 frame.latest → 归一化点击 → 新帧
 
 ### 发布与分发
 

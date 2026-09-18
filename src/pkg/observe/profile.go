@@ -11,17 +11,7 @@ const (
 	CaptureModePull   CaptureMode = "pull"
 )
 
-// UIMode selects how much UI tree data is returned.
-type UIMode string
-
-const (
-	UIModeFull        UIMode = "full"
-	UIModeCompact     UIMode = "compact"
-	UIModeInteractive UIMode = "interactive"
-	UIModeRealtime    UIMode = "realtime"
-)
-
-// TimingProfile records segmented latency for one observe/screenshot/dump call.
+// TimingProfile records segmented latency for one screenshot call.
 type TimingProfile struct {
 	Mode       string `json:"mode,omitempty"`
 	ADBCalls   int    `json:"adb_calls,omitempty"`
@@ -31,23 +21,13 @@ type TimingProfile struct {
 	ResizeMs   int64  `json:"resize_ms,omitempty"`
 	EncodeMs   int64  `json:"encode_ms,omitempty"`
 	WriteMs    int64  `json:"write_ms,omitempty"`
-	DumpMs     int64  `json:"dump_ms,omitempty"`
-	ParseMs    int64  `json:"parse_ms,omitempty"`
 	TotalMs    int64  `json:"total_ms,omitempty"`
 }
 
-// ObserveProfile is the combined profile for a parallel observe call.
+// ObserveProfile is the combined profile for a screenshot observe call.
 type ObserveProfile struct {
 	Screenshot *TimingProfile `json:"screenshot,omitempty"`
-	UI         *TimingProfile `json:"ui,omitempty"`
 	TotalMs    int64          `json:"total_ms,omitempty"`
-}
-
-func commanderSerial(cmd adb.Commander) string {
-	if c, ok := cmd.(*adb.Client); ok {
-		return c.Serial
-	}
-	return ""
 }
 
 func resolveCaptureMode(cmd adb.Commander, mode CaptureMode) CaptureMode {
@@ -69,13 +49,4 @@ func looksRemoteSerial(serial string) bool {
 		}
 	}
 	return false
-}
-
-func normalizeUIMode(mode UIMode) UIMode {
-	switch mode {
-	case UIModeCompact, UIModeInteractive, UIModeRealtime:
-		return mode
-	default:
-		return UIModeFull
-	}
 }
