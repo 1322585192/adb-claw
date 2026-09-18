@@ -131,7 +131,7 @@ adb-claw open 'snssdk1128://search/result?keyword=遥控车&type=0'
 
 ```
 1. adb-claw open 'snssdk1128://search/result?keyword=遥控车&type=0'
-2. adb-claw wait --text "综合" --timeout 5000    # 等待搜索结果加载
+2. adb-claw wait --changed --timeout 5000
 3. 根据需要点击分类 Tab（视频/直播/图文等）
 ```
 
@@ -141,7 +141,7 @@ adb-claw open 'snssdk1128://search/result?keyword=遥控车&type=0'
 
 ```
 1. adb-claw open 'snssdk1128://search/result?keyword={关键词}&type=0'
-2. adb-claw wait --text "直播" --timeout 5000
+2. adb-claw wait --changed --timeout 5000
 3. 手动点击"直播"Tab 切换（type=1 参数可能不生效）
 4. 纵向滚动浏览直播列表
 ```

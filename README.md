@@ -274,7 +274,7 @@ Contributions welcome — see `skills/apps/README.md` for the profile spec.
 1. **Observe first** — Always `observe` / `frame.latest` before deciding. Read the JPEG path; do not paste JSON
 2. **Normalized taps** — Skill tools use `--normalized` 0–999. Never tap JPEG pixels
 3. **Scroll, don't swipe** — `scroll down` over manual swipe math
-4. **Wait, don't sleep** — `wait --changed` or `frame.wait_after`
+4. **Never sleep** — after an action, `observe` immediately. Use `wait --changed` / `frame.wait_after` only when you need the pixels to change first
 5. **Deep link for CJK** — `open 'app://search?keyword=中文'` instead of `type`
 6. **Clear before type** — `clear-field` then `type`
 7. **Check App Profiles** — Load profile before exploring unfamiliar apps

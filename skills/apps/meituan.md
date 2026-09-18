@@ -320,10 +320,10 @@ adb-claw key BACK
 **原因**: 美团有反自动化检测机制，识别 adb input 事件的特征（时序、精度等）。
 
 **解决**:
-1. 控制操作频率，关键操作之间加 1-2 秒间隔
+1. 不要在命令之间 `sleep` 或人为加固定秒数间隔。动作后立刻 `observe` / `wait --changed` / `wait --activity`
 2. 优先使用深度链接减少 UI 操作次数
 3. 如触发验证码，滑块拼图可尝试 `adb-claw swipe` 拖动解决；图标点选需人工介入
-4. 验证码弹窗可通过 `resource_id` 含 `ffv` 的 ImageView 关闭（X 按钮）
+4. 验证码弹窗看 JPEG 点关闭（X）按钮，用 `--normalized`
 
 ### 营销弹窗数量多且随机
 

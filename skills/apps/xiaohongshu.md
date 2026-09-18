@@ -177,12 +177,12 @@ Pad 上的差异未经测试，预计搜索结果页会变为三列或更宽布�
 # 1. 用深度链接搜索，keyword 必须 URL encode
 keyword=$(python3 -c "import urllib.parse; print(urllib.parse.quote('保健品推荐'))")
 adb-claw open "xhsdiscover://search/result?keyword=${keyword}&type=51"
-sleep 3    # 等待结果加载
+adb-claw wait --changed --timeout 5000
 
 # 2. 默认是综合 Tab，需要看用户时切到「用户」Tab
 adb-claw observe --width 720
 # 看图点「用户」Tab：adb-claw tap --normalized X Y
-sleep 2
+adb-claw wait --changed --timeout 3000
 
 # 3. 收集帖子信息：读 JPEG，不要抓节点树
 adb-claw observe --width 720
@@ -193,7 +193,6 @@ adb-claw observe --width 720
 ```bash
 for i in 1 2 3 4 5; do
   adb-claw scroll down
-  adb-claw wait --changed --timeout 1500
   adb-claw observe --width 720
 done
 ```
@@ -204,12 +203,11 @@ done
 # 搜索用户名
 keyword=$(python3 -c "import urllib.parse; print(urllib.parse.quote('注册营养师Yuanyuan'))")
 adb-claw open "xhsdiscover://search/result?keyword=${keyword}&type=51"
-sleep 2
-adb-claw tap --text "用户"
-sleep 2
-# 点击第一个用户结果
-adb-claw tap --text "注册营养师Yuanyuan"
-sleep 3
+adb-claw wait --changed --timeout 5000
+adb-claw observe --width 720
+# 看图点「用户」Tab，再点第一个用户结果（--normalized）
+adb-claw tap --normalized X Y
+adb-claw wait --changed --timeout 3000
 ```
 
 ### 读取用户主页核心数据
@@ -236,11 +234,10 @@ for e in data['data']['elements']:
 
 ```bash
 # 进入主页后
-adb-claw tap --text "橱窗"    # 或点击橱窗预览区域
-sleep 2
-# 点击分类（如「营养品」）
-adb-claw tap --text "营养品"
-sleep 2
+# 看图点「橱窗」，再点分类（如「营养品」），用 --normalized
+adb-claw observe --width 720
+adb-claw tap --normalized X Y
+adb-claw wait --changed --timeout 3000
 # 提取产品名和销量
 adb-claw observe --width 720  # read the JPEG; python node scraping removed "
 import json, sys
@@ -250,14 +247,15 @@ for e in data['data']['elements']:
     if t and ('·' in t or '已售' in t): print(t[:100])
 "
 # 滚动翻页继续提取
-adb-claw scroll down && sleep 1
+adb-claw scroll down
+adb-claw observe --width 720
 ```
 
 ### 滚动个人主页收集所有帖子标题
 
 ```bash
 for i in 1 2 3; do
-  adb-claw scroll down && sleep 0.8
+  adb-claw scroll down
   adb-claw observe --width 720  # read the JPEG; python node scraping removed "
 import json, sys
 data = json.load(sys.stdin)
@@ -282,8 +280,8 @@ for e in data['data']['elements']:
         print(f'tap {(b[\"left\"]+b[\"right\"])//2} {(b[\"top\"]+b[\"bottom\"])//2}')
 "
 # 按输出坐标点击
-adb-claw tap 806 1695
-sleep 3
+adb-claw tap --normalized X Y
+adb-claw wait --changed --timeout 3000
 # 读取正文
 adb-claw observe --width 720  # read the JPEG; python node scraping removed "
 import json, sys
@@ -293,7 +291,8 @@ for e in data['data']['elements']:
     if t and len(t)>30: print(t[:300])
 "
 # 滚动到评论区读取作者互动
-adb-claw scroll down && sleep 1
+adb-claw scroll down
+adb-claw observe --width 720
 ```
 
 ## 已知问题
@@ -344,7 +343,7 @@ adb-claw open "xhsdiscover://search/result?keyword=${keyword}&type=51"
 
 **原因**：App 页面渲染需要时间，截图先于渲染完成。
 
-**解决**：`adb-claw open` 后固定等待 `sleep 2~3`，重要页面等待更长（如主页 `sleep 3`）。
+**解决**：`adb-claw open` 后立刻 `wait --changed`（或 `frame.wait_after`），不要 `sleep`。截图仍是旧页就再 `observe` 一次。
 
 ---
 

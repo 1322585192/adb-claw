@@ -96,7 +96,8 @@
     "image_only": "The only perception input is a JPEG file from observe or frame.latest. Do not request a UI tree.",
     "normalized_coords": "All model actions use a 1000x1000 (0-999) grid. adb-claw maps them onto the frame's device_width/device_height.",
     "stale_frame": "STALE_FRAME means the screen changed or the frame aged out. Call frame.latest again before acting.",
-    "wait_after": "After a click, use frame.wait_after instead of sleep.",
+    "no_sleep": "Never insert sleep, time.sleep, adb-claw shell sleep, or a timed pause between commands. After tap/swipe/open/key, immediately observe or frame.latest. Skip wait if the next step is already a new frame.",
+    "wait_after": "Use frame.wait_after or wait --changed only when you need the pixels to change before deciding. They return as soon as the image hash changes. Do not sleep before or after. Do not call wait just to create a gap.",
     "media": "Adapter default: gemini-3.8-flash, thinking_level=low, media_resolution=medium, inline JPEG. Upgrade to high only for dense small text.",
     "cjk": "type is ASCII only. Use open with a deep link for Chinese/Japanese/Korean."
   }

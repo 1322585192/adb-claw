@@ -42,3 +42,4 @@ Agent 操作某个 App 前，按包名匹配对应的 Profile 文件：
 1. 基于真机实际操作验证，注明测试的 App 版本和设备
 2. 深度链接需验证可用
 3. 标注 Phone / Pad 差异（如果有条件测试）
+4. 禁止写 `sleep` / `time.sleep` / 固定秒数间隔。动作后立刻 `observe`，或 `wait --changed` / `wait --activity`（有画面变化才返回）
